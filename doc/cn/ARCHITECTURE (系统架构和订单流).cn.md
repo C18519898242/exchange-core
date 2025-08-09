@@ -68,45 +68,75 @@ flowchart TD
     class H,I handling;
     class J,J1,J2 persistence;
 
-    %% Clickable Links to Source Code
-    click B "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/ExchangeApi.java" "Open ExchangeApi.java" _blank
-    click D "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/GroupingProcessor.java" "Open GroupingProcessor.java" _blank
-    click E "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/RiskEngine.java" "Open RiskEngine.java" _blank
-    click F "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/MatchingEngineRouter.java" "Open MatchingEngineRouter.java" _blank
-    click G "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/ResultsHandler.java" "Open ResultsHandler.java" _blank
-    click H "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/SimpleEventsProcessor.java" "Open SimpleEventsProcessor.java" _blank
-    click J "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/journaling/DiskSerializationProcessor.java" "Open DiskSerializationProcessor.java" _blank
+    %% Clickable Links to Internal Anchors
+    click B "#component-exchangeapi" "跳转到 ExchangeApi 描述"
+    click D "#component-groupingprocessor" "跳转到 GroupingProcessor 描述"
+    click E "#component-riskengine" "跳转到 RiskEngine 描述"
+    click F "#component-matchingenginerouter" "跳转到 MatchingEngineRouter 描述"
+    click G "#component-resultshandler" "跳转到 ResultsHandler 描述"
+    click H "#component-simpleeventsprocessor" "跳转到 SimpleEventsProcessor 描述"
+    click J "#component-diskserializationprocessor" "跳转到 DiskSerializationProcessor 描述"
 ```
 
 ## 组件描述
 
 以下是处理流水线中每个组件角色的详细分解：
 
-### 客户端
+<h3 id="component-client">客户端</h3>
+
 *   **用户 API 客户端**: 代表与交易所交互的任何外部应用程序或用户脚本。它通过发送命令（如放置或取消订单）来发起操作。
 
-### [交易核心 (Disruptor RingBuffer)](https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/ExchangeCore.java)
+<h3 id="component-core">交易核心 (Disruptor RingBuffer)</h3>
+
 这是系统的高性能、低延迟核心，基于 LMAX Disruptor 模式构建。整个处理流水线在 `ExchangeCore.java` 类中进行配置和编排。
+*   **核心类**: `src/main/java/exchange/core2/core/ExchangeCore.java`
 
-*   **ExchangeApi**: 面向公众的交易所网关。它提供了一个用户友好的 API，并负责将外部调用（例如 `placeNewOrder`）转换为内部的 `OrderCommand` 格式。然后，它将这些命令发布到 `RingBuffer` 上进行处理。
+<h4 id="component-exchangeapi">ExchangeApi</h4>
 
-*   **RingBuffer**: Disruptor 框架的核心数据结构。它是一个预先分配的环形缓冲区，`OrderCommand` 对象存活于此。所有处理阶段（处理器）都直接操作此缓冲区中的对象，从而实现了组件之间无锁、高吞吐量的通信。
+面向公众的交易所网关。它提供了一个用户友好的 API，并负责将外部调用（例如 `placeNewOrder`）转换为内部的 `OrderCommand` 格式。然后，它将这些命令发布到 `RingBuffer` 上进行处理。
+*   **关键类位置**: `src/main/java/exchange/core2/core/ExchangeApi.java`
 
-*   **GroupingProcessor (阶段 1, 并行)**: 作为阶段1的**并行处理器之一**，其主要功能是将传入的命令分组成批次。这是一种性能优化，通过减少处理每个命令的开销来提高吞吐量。它不关心命令的业务内容，只为下游定义“批次”的边界。
+<h4 id="component-ringbuffer">RingBuffer</h4>
 
-*   **RiskEngine (阶段 1, 并行)**: 作为阶段1的**另一个并行处理器**，负责交易前风险管理和用户账户状态。它是一个有状态的组件，对批次内的每个命令进行检查。当收到 `PLACE_ORDER` 命令时，它会检查用户是否有足够的资金或保证金来覆盖该订单。它将拒绝任何未通过这些风险检查的命令。
+Disruptor 框架的核心数据结构。它是一个预先分配的环形缓冲区，`OrderCommand` 对象存活于此。所有处理阶段（处理器）都直接操作此缓冲区中的对象，从而实现了组件之间无锁、高吞t量的通信。
 
-*   **MatchingEngineRouter (阶段 2)**: **第二阶段**的处理器，是撮合逻辑的核心。它必须等待**同一个命令**被 `GroupingProcessor` 和 `RiskEngine` 都处理完毕后才能开始。它接收已通过风险检查的命令，并根据交易对将其路由到相应的 `IOrderBook` 实例执行撮合。结果作为 `MatcherTradeEvent` 对象链附加到 `OrderCommand` 上。
+<h4 id="component-groupingprocessor">GroupingProcessor (阶段 1, 并行)</h4>
 
-*   **ResultsHandler (阶段 3)**: Disruptor 流水线中的最后一个处理器。其作用简单但至关重要：它接收完全处理过的 `OrderCommand`——现在已富含最终结果代码和撮合事件链——并将其传递给指定的下游事件消费者。
+作为阶段1的**并行处理器之一**，其主要功能是将传入的命令分组成批次。这是一种性能优化，通过减少处理每个命令的开销来提高吞吐量。它不关心命令的业务内容，只为下游定义“批次”的边界。
+*   **关键类位置**: `src/main/java/exchange/core2/core/processors/GroupingProcessor.java`
 
-### 事件处理
-*   **SimpleEventsProcessor**: 该组件充当主要的下游消费者。它从 `ResultsHandler` 接收处理过的 `OrderCommand`，并将内部复杂的的数据结构转换为适用于外部系统的干净、离散的事件。它“解包”命令以产生 `CommandResult`（高级别结果）、`TradeEvent`（详细交易信息）和 `OrderBook`（市场数据更新）。
+<h4 id="component-riskengine">RiskEngine (阶段 1, 并行)</h4>
 
-*   **外部监听器**: 这代表了 `SimpleEventsProcessor` 生成的事件的最终目的地。这些是订阅事件流以与交易所状态保持同步的客户端应用程序、数据库、UI 前端或分析系统。
+作为阶段1的**另一个并行处理器**，负责交易前风险管理和用户账户状态。它是一个有状态的组件，对批次内的每个命令进行检查。当收到 `PLACE_ORDER` 命令时，它会检查用户是否有足够的资金或保证金来覆盖该订单。它将拒绝任何未通过这些风险检查的命令。
+*   **关键类位置**: `src/main/java/exchange/core2/core/processors/RiskEngine.java`
 
-### 持久化与恢复
-*   **DiskSerializationProcessor**: 这是一个**并行**的、独立于核心处理流水线的处理器。它的存在是为了保证系统的**持久化**和**灾难恢复**能力，而不会拖慢核心交易的性能。它的工作模式是整个系统可靠性的基石。
+<h4 id="component-matchingenginerouter">MatchingEngineRouter (阶段 2)</h4>
+
+**第二阶段**的处理器，是撮合逻辑的核心。它必须等待**同一个命令**被 `GroupingProcessor` 和 `RiskEngine` 都处理完毕后才能开始。它接收已通过风险检查的命令，并根据交易对将其路由到相应的 `IOrderBook` 实例执行撮合。结果作为 `MatcherTradeEvent` 对象链附加到 `OrderCommand` 上。
+*   **关键类位置**: `src/main/java/exchange/core2/core/processors/MatchingEngineRouter.java`
+
+<h4 id="component-resultshandler">ResultsHandler (阶段 3)</h4>
+
+Disruptor 流水线中的最后一个处理器。其作用简单但至关重要：它接收完全处理过的 `OrderCommand`——现在已富含最终结果代码和撮合事件链——并将其传递给指定的下游事件消费者。
+*   **关键类位置**: `src/main/java/exchange/core2/core/processors/ResultsHandler.java`
+
+<h3 id="component-events">事件处理</h3>
+
+<h4 id="component-simpleeventsprocessor">SimpleEventsProcessor</h4>
+
+该组件充当主要的下游消费者。它从 `ResultsHandler` 接收处理过的 `OrderCommand`，并将内部复杂的的数据结构转换为适用于外部系统的干净、离散的事件。它“解包”命令以产生 `CommandResult`（高级别结果）、`TradeEvent`（详细交易信息）和 `OrderBook`（市场数据更新）。
+*   **关键类位置**: `src/main/java/exchange/core2/core/SimpleEventsProcessor.java`
+
+<h4 id="component-external-listeners">外部监听器</h4>
+
+这代表了 `SimpleEventsProcessor` 生成的事件的最终目的地。这些是订阅事件流以与交易所状态保持同步的客户端应用程序、数据库、UI 前端或分析系统。
+
+<h3 id="component-persistence">持久化与恢复</h3>
+
+<h4 id="component-diskserializationprocessor">DiskSerializationProcessor</h4>
+
+这是一个**并行**的、独立于核心处理流水线的处理器。它的存在是为了保证系统的**持久化**和**灾难恢复**能力，而不会拖慢核心交易的性能。它的工作模式是整个系统可靠性的基石。
+*   **关键类位置**: `src/main/java/exchange/core2/core/processors/journaling/DiskSerializationProcessor.java`
     *   **事务日志 (Journaling)**: 它像一个飞行记录仪，监听并序列化每一个会改变系统状态的 `OrderCommand`，并以高效的顺序写方式记录到磁盘上的日志文件中。
     *   **状态快照 (Snapshotting)**: 它负责接收核心业务引擎（`RiskEngine`, `MatchingEngineRouter`）的完整状态，并将其保存为快照文件。
     *   **恢复机制**: 当系统重启时，它能够先加载最新的快照，然后重放快照之后的所有事务日志，从而将系统内存恢复到宕机前的最终状态。
