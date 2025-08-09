@@ -67,16 +67,16 @@ flowchart TD
     class C,D,E,F,G core;
     class H,I handling;
     class J,J1,J2 persistence;
-
-    %% Clickable Links to Internal Anchors
-    click B "#component-exchangeapi" "Go to ExchangeApi section"
-    click D "#component-groupingprocessor" "Go to GroupingProcessor section"
-    click E "#component-riskengine" "Go to RiskEngine section"
-    click F "#component-matchingenginerouter" "Go to MatchingEngineRouter section"
-    click G "#component-resultshandler" "Go to ResultsHandler section"
-    click H "#component-simpleeventsprocessor" "Go to SimpleEventsProcessor section"
-    click J "#component-diskserializationprocessor" "Go to DiskSerializationProcessor section"
 ```
+
+**Component Index:**
+*   [ExchangeApi](#component-exchangeapi)
+*   [GroupingProcessor](#component-groupingprocessor)
+*   [RiskEngine](#component-riskengine)
+*   [MatchingEngineRouter](#component-matchingenginerouter)
+*   [ResultsHandler](#component-resultshandler)
+*   [SimpleEventsProcessor](#component-simpleeventsprocessor)
+*   [DiskSerializationProcessor](#component-diskserializationprocessor)
 
 ## Component Descriptions
 
@@ -91,49 +91,49 @@ Here is a detailed breakdown of each component's role in the processing pipeline
 This is the high-performance, low-latency core of the system, built on the LMAX Disruptor pattern. The entire processing pipeline is configured and orchestrated in the `ExchangeCore.java` class.
 *   **Core Class**: `src/main/java/exchange/core2/core/ExchangeCore.java`
 
-<h4 id="component-exchangeapi">ExchangeApi</h4>
+### ExchangeApi <a name="component-exchangeapi"></a>
 
 The public-facing gateway to the exchange. It provides a user-friendly API and is responsible for translating external calls (e.g., `placeNewOrder`) into the internal `OrderCommand` format. It then publishes these commands onto the `RingBuffer` for processing.
 *   **Key Class Location**: `src/main/java/exchange/core2/core/ExchangeApi.java`
 
-<h4 id="component-ringbuffer">RingBuffer</h4>
+### RingBuffer <a name="component-ringbuffer"></a>
 
 The central data structure of the Disruptor framework. It's a pre-allocated circular buffer where `OrderCommand` objects live. All processing stages (processors) operate on the objects directly within this buffer, which enables lock-free, high-throughput communication between components.
 
-<h4 id="component-groupingprocessor">GroupingProcessor (Stage 1, Parallel)</h4>
+### GroupingProcessor (Stage 1, Parallel) <a name="component-groupingprocessor"></a>
 
 As **one of the parallel processors** in Stage 1, its primary function is to batch incoming commands into groups. This is a performance optimization that improves throughput by reducing the overhead of processing each command. It is not concerned with the business content of commands but only defines the "batch" boundaries for downstream processors.
 *   **Key Class Location**: `src/main/java/exchange/core2/core/processors/GroupingProcessor.java`
 
-<h4 id="component-riskengine">RiskEngine (Stage 1, Parallel)</h4>
+### RiskEngine (Stage 1, Parallel) <a name="component-riskengine"></a>
 
 As the **other parallel processor** in Stage 1, it is responsible for pre-trade risk management and user account state. It is a stateful component that inspects every command within a batch. When it receives a `PLACE_ORDER` command, it checks if the user has sufficient funds or margin to cover the order and rejects any command that fails these checks.
 *   **Key Class Location**: `src/main/java/exchange/core2/core/processors/RiskEngine.java`
 
-<h4 id="component-matchingenginerouter">MatchingEngineRouter (Stage 2)</h4>
+### MatchingEngineRouter (Stage 2) <a name="component-matchingenginerouter"></a>
 
 The **Stage 2** processor and the heart of the matching logic. It must wait for the **same command** to be processed by both `GroupingProcessor` and `RiskEngine` before it can begin. It takes commands that have passed risk checks and routes them to the appropriate `IOrderBook` instance for matching. The outcomes are attached to the `OrderCommand` as a chain of `MatcherTradeEvent` objects.
 *   **Key Class Location**: `src/main/java/exchange/core2/core/processors/MatchingEngineRouter.java`
 
-<h4 id="component-resultshandler">ResultsHandler (Stage 3)</h4>
+### ResultsHandler (Stage 3) <a name="component-resultshandler"></a>
 
 The final processor in the Disruptor pipeline. Its role is simple but crucial: it takes the fully processed `OrderCommand`—now enriched with a final result code and a chain of matcher events—and passes it to the designated downstream event consumer.
 *   **Key Class Location**: `src/main/java/exchange/core2/core/processors/ResultsHandler.java`
 
 <h3 id="component-events">Event Handling</h3>
 
-<h4 id="component-simpleeventsprocessor">SimpleEventsProcessor</h4>
+### SimpleEventsProcessor <a name="component-simpleeventsprocessor"></a>
 
 This component acts as the primary downstream consumer. It receives the processed `OrderCommand` from the `ResultsHandler` and translates the internal, complex data structures into clean, discrete events suitable for external systems. It "unpacks" the command to produce `CommandResult` (the high-level outcome), `TradeEvent` (detailed trade information), and `OrderBook` (market data updates).
 *   **Key Class Location**: `src/main/java/exchange/core2/core/SimpleEventsProcessor.java`
 
-<h4 id="component-external-listeners">External Listeners</h4>
+### External Listeners <a name="component-external-listeners"></a>
 
 This represents the final destination for the events generated by the `SimpleEventsProcessor`. These are the client-side applications, databases, UI frontends, or analytics systems that subscribe to the event stream to stay synchronized with the state of the exchange.
 
 <h3 id="component-persistence">Persistence & Recovery</h3>
 
-<h4 id="component-diskserializationprocessor">DiskSerializationProcessor</h4>
+### DiskSerializationProcessor <a name="component-diskserializationprocessor"></a>
 
 This is a **parallel** processor that operates independently of the core processing pipeline. Its purpose is to ensure system **persistence** and **disaster recovery** capabilities without slowing down the core trading performance. Its working model is the cornerstone of the entire system's reliability.
 *   **Key Class Location**: `src/main/java/exchange/core2/core/processors/journaling/DiskSerializationProcessor.java`
