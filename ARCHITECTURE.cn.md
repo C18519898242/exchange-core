@@ -8,33 +8,39 @@
 
 ```mermaid
 flowchart TD
-    %% 客户端节点
+    %% Client Nodes
     A[用户 API 客户端]
     B[ExchangeApi]
 
-    %% 核心处理子图
+    %% Core Processing Subgraph
     subgraph 交易核心 [Disruptor RingBuffer]
         C{RingBuffer}
-        D[GroupingProcessor]
-        E[RiskEngine]
+        
+        subgraph 阶段 1 [并行预处理]
+            direction LR
+            D[GroupingProcessor]
+            E[RiskEngine]
+        end
+
         F[MatchingEngineRouter]
         G[ResultsHandler]
     end
 
-    %% 事件处理节点
+    %% Event Handling Nodes
     H[SimpleEventsProcessor]
     I{外部监听器}
     I1[命令结果]
     I2[交易事件]
     I3[订单簿更新]
 
-    %% 连接
+    %% Connections
     A -->|placeNewOrder| B;
     B -->|发布 OrderCommand| C;
-    C -->|阶段 1 预处理| D;
-    D --> E;
-    E -->|阶段 2 撮合| F;
-    F -->|处理撮合| F;
+    C --> D;
+    C --> E;
+    D -->|定义批次边界| F;
+    E -->|检查并冻结资金| F;
+    F -->|阶段 2 撮合| F;
     F -->|阶段 3 结果| G;
     G -->|onEvent 调用 consumer accept| H;
     H -->|accept 触发| I;
@@ -42,7 +48,7 @@ flowchart TD
     I --> I2;
     I --> I3;
 
-    %% 样式定义
+    %% Style Definitions
     classDef client fill:#cce5ff,stroke:#333,stroke-width:2px;
     classDef core fill:#fff2cc,stroke:#333,stroke-width:2px;
     classDef handling fill:#d4edda,stroke:#333,stroke-width:2px;
@@ -51,13 +57,13 @@ flowchart TD
     class C,D,E,F,G core;
     class H,I,I1,I2,I3 handling;
 
-    %% 点击链接到源代码
-    click B "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/ExchangeApi.java" "打开 ExchangeApi.java" _blank
-    click D "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/GroupingProcessor.java" "打开 GroupingProcessor.java" _blank
-    click E "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/RiskEngine.java" "打开 RiskEngine.java" _blank
-    click F "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/MatchingEngineRouter.java" "打开 MatchingEngineRouter.java" _blank
-    click G "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/ResultsHandler.java" "打开 ResultsHandler.java" _blank
-    click H "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/SimpleEventsProcessor.java" "打开 SimpleEventsProcessor.java" _blank
+    %% Clickable Links to Source Code
+    click B "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/ExchangeApi.java" "Open ExchangeApi.java" _blank
+    click D "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/GroupingProcessor.java" "Open GroupingProcessor.java" _blank
+    click E "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/RiskEngine.java" "Open RiskEngine.java" _blank
+    click F "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/MatchingEngineRouter.java" "Open MatchingEngineRouter.java" _blank
+    click G "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/ResultsHandler.java" "Open ResultsHandler.java" _blank
+    click H "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/SimpleEventsProcessor.java" "Open SimpleEventsProcessor.java" _blank
 ```
 
 ## 组件描述
@@ -74,11 +80,11 @@ flowchart TD
 
 *   **RingBuffer**: Disruptor 框架的核心数据结构。它是一个预先分配的环形缓冲区，`OrderCommand` 对象存活于此。所有处理阶段（处理器）都直接操作此缓冲区中的对象，从而实现了组件之间无锁、高吞吐量的通信。
 
-*   **GroupingProcessor (阶段 1)**: 这是流水线中的第一个处理器。其主要功能是将传入的命令分组成批次。这是一种性能优化，通过减少处理每个命令的开销来提高吞吐量。分组是基于可配置的大小限制或时间阈值形成的。
+*   **GroupingProcessor (阶段 1, 并行)**: 作为阶段1的**并行处理器之一**，其主要功能是将传入的命令分组成批次。这是一种性能优化，通过减少处理每个命令的开销来提高吞吐量。它不关心命令的业务内容，只为下游定义“批次”的边界。
 
-*   **RiskEngine (阶段 1)**: 第二个处理器，负责交易前风险管理和用户账户状态。它是一个有状态的组件，维护所有用户资料、余额和头寸。当收到 `PLACE_ORDER` 命令时，它会检查用户是否有足够的资金或保证金来覆盖该订单。它将拒绝任何未通过这些风险检查的命令。它还处理诸如余额调整和用户创建之类的管理任务。
+*   **RiskEngine (阶段 1, 并行)**: 作为阶段1的**另一个并行处理器**，负责交易前风险管理和用户账户状态。它是一个有状态的组件，对批次内的每个命令进行检查。当收到 `PLACE_ORDER` 命令时，它会检查用户是否有足够的资金或保证金来覆盖该订单。它将拒绝任何未通过这些风险检查的命令。
 
-*   **MatchingEngineRouter (阶段 2)**: 第三个处理器，是撮合逻辑的核心。它接收已通过 `RiskEngine` 清算的命令，并根据命令的交易对将其路由到相应的 `IOrderBook` 实例。它执行核心的撮合算法，从而产生交易、拒绝或修改订单簿。结果作为 `MatcherTradeEvent` 对象链附加到 `OrderCommand` 上。它还负责生成 L2 市场数据快照。
+*   **MatchingEngineRouter (阶段 2)**: **第二阶段**的处理器，是撮合逻辑的核心。它必须等待**同一个命令**被 `GroupingProcessor` 和 `RiskEngine` 都处理完毕后才能开始。它接收已通过风险检查的命令，并根据交易对将其路由到相应的 `IOrderBook` 实例执行撮合。结果作为 `MatcherTradeEvent` 对象链附加到 `OrderCommand` 上。
 
 *   **ResultsHandler (阶段 3)**: Disruptor 流水线中的最后一个处理器。其作用简单但至关重要：它接收完全处理过的 `OrderCommand`——现在已富含最终结果代码和撮合事件链——并将其传递给指定的下游事件消费者。
 

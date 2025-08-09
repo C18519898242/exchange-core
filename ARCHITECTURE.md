@@ -15,8 +15,13 @@ flowchart TD
     %% Core Processing Subgraph
     subgraph Exchange Core [Disruptor RingBuffer]
         C{RingBuffer}
-        D[GroupingProcessor]
-        E[RiskEngine]
+        
+        subgraph Stage 1 [Parallel Pre-processing]
+            direction LR
+            D[GroupingProcessor]
+            E[RiskEngine]
+        end
+
         F[MatchingEngineRouter]
         G[ResultsHandler]
     end
@@ -28,13 +33,14 @@ flowchart TD
     I2[TradeEvent]
     I3[OrderBook Update]
 
-    %% Links
+    %% Connections
     A -->|placeNewOrder| B;
     B -->|Publishes OrderCommand| C;
-    C -->|Stage 1 Pre-processing| D;
-    D --> E;
-    E -->|Stage 2 Matching| F;
-    F -->|Processes matching| F;
+    C --> D;
+    C --> E;
+    D -->|Defines batch boundary| F;
+    E -->|Checks & holds funds| F;
+    F -->|Stage 2 Matching| F;
     F -->|Stage 3 Results| G;
     G -->|onEvent calls consumer accept| H;
     H -->|accept triggers| I;
@@ -42,7 +48,7 @@ flowchart TD
     I --> I2;
     I --> I3;
 
-    %% Styling for Visual Grouping
+    %% Style Definitions
     classDef client fill:#cce5ff,stroke:#333,stroke-width:2px;
     classDef core fill:#fff2cc,stroke:#333,stroke-width:2px;
     classDef handling fill:#d4edda,stroke:#333,stroke-width:2px;
@@ -74,11 +80,11 @@ This is the high-performance, low-latency core of the system, built on the LMAX 
 
 *   **RingBuffer**: The central data structure of the Disruptor framework. It's a pre-allocated circular buffer where `OrderCommand` objects live. All processing stages (processors) operate on the objects directly within this buffer, which enables lock-free, high-throughput communication between components.
 
-*   **GroupingProcessor (Stage 1)**: This is the first processor in the pipeline. Its primary function is to batch incoming commands into groups. This is a performance optimization that improves throughput by reducing the overhead of processing each command individually. Groups are formed based on a configurable size limit or a time-based threshold.
+*   **GroupingProcessor (Stage 1, Parallel)**: As **one of the parallel processors** in Stage 1, its primary function is to batch incoming commands into groups. This is a performance optimization that improves throughput. It is not concerned with the business content of commands but only defines the "batch" boundaries for downstream processors.
 
-*   **RiskEngine (Stage 1)**: The second processor, responsible for pre-trade risk management and user account state. It's a stateful component that maintains all user profiles, balances, and positions. When it receives a `PLACE_ORDER` command, it checks if the user has sufficient funds or margin to cover the order. It will reject any command that fails these risk checks. It also handles administrative tasks like balance adjustments and user creation.
+*   **RiskEngine (Stage 1, Parallel)**: As the **other parallel processor** in Stage 1, it is responsible for pre-trade risk management and user account state. It is a stateful component that inspects every command within a batch. When it receives a `PLACE_ORDER` command, it checks if the user has sufficient funds or margin to cover the order and rejects any command that fails these checks.
 
-*   **MatchingEngineRouter (Stage 2)**: The third processor and the heart of the matching logic. It takes commands that have been cleared by the `RiskEngine` and routes them to the appropriate `IOrderBook` instance based on the command's symbol. It executes the core matching algorithm, which results in trades, rejections, or modifications to the order book. The outcomes are attached to the `OrderCommand` as a chain of `MatcherTradeEvent` objects. It is also responsible for generating L2 market data snapshots.
+*   **MatchingEngineRouter (Stage 2)**: The **Stage 2** processor and the heart of the matching logic. It must wait for the **same command** to be processed by both `GroupingProcessor` and `RiskEngine` before it can begin. It takes commands that have passed risk checks and routes them to the appropriate `IOrderBook` instance for matching. The outcomes are attached to the `OrderCommand` as a chain of `MatcherTradeEvent` objects.
 
 *   **ResultsHandler (Stage 3)**: The final processor in the Disruptor pipeline. Its role is simple but crucial: it takes the fully processed `OrderCommand`—now enriched with a final result code and a chain of matcher events—and passes it to the designated downstream event consumer.
 
