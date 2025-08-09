@@ -234,3 +234,58 @@ Let's delve into its mechanics:
 
 **Summary**
 `GroupingProcessor` is a classic **batch processing** optimization. It sacrifices the **lowest possible latency** for a single command (as it has to wait to be grouped) in exchange for **higher overall system throughput**. In scenarios like financial trading, which require handling a massive volume of concurrent requests, this trade-off is very common and effective. It forms Stage 1 along with `RiskEngine`, preparing batches of pre-processed commands for the subsequent matching stage.
+
+---
+
+## Component Deep Dive: RiskEngine
+
+The `RiskEngine` is the **second gate** in the trading pipeline and the **first true business logic gate**. It is a **stateful** component whose core responsibility is **pre-trade risk checks and account state management**. Think of it as a bank teller who must verify your identity, check if your account is active, and ensure you have sufficient funds before processing a transfer request (placing an order).
+
+Its work is divided into two main parts: **pre-processing (Hold)** and **post-processing (Release)**, corresponding to the `preProcessCommand` and `handlerRiskRelease` methods.
+
+### Command Types Handled by `RiskEngine`
+
+The `RiskEngine` is a **mandatory stop** for almost all commands before they reach the matching engine. It uses a large `switch` statement (in the `preProcessCommand` method) to differentiate and apply logic for various command types:
+
+1.  **`PLACE_ORDER`**: This is the most complex and critical logic.
+    *   **Checks**: Verifies the user exists, the symbol is valid, and the order quantity/price are legal.
+    *   **Calculation**: Computes the required funds (margin) to hold based on the order's side, price, and quantity.
+    *   **Hold**: Transfers the required funds from the user's available balance (`balance`) to the held amount (`heldAmount`).
+    *   **Rejection**: If the available balance is insufficient, it immediately sets `resultCode = RISK_NSF` (Not Sufficient Funds) and terminates the command's processing.
+
+2.  **`CANCEL_ORDER`**:
+    *   **Checks**: Verifies the order exists and belongs to the user.
+    *   **Note**: It does **not** immediately release the held funds. This is because it doesn't know if the order was partially filled at the moment of cancellation. The release of funds must await the final result from the matching engine.
+
+3.  **`MOVE_ORDER`**:
+    *   **Checks**: Same as `CANCEL_ORDER`.
+    *   **Processing**: It handles the old order like a `CANCEL_ORDER` and the new-priced order like a `PLACE_ORDER`, but this is all at the "pre-processing" level. The actual fund changes depend on the matching result.
+
+4.  **`ADJUST_BALANCE`**:
+    *   **Checks**: Verifies the user exists.
+    *   **Processing**: Directly modifies the user's `balance`. This is a purely administrative action that does not proceed to the matching engine.
+
+### Core Data Structures
+
+All of `RiskEngine`'s logic revolves around two core, in-memory `Map`s (specifically `LongObjectHashMap` for performance):
+
+1.  **`users` (`LongObjectHashMap<UserProfile>`)**:
+    *   **Key**: `uid` (User ID)
+    *   **Value**: A `UserProfile` object, containing all information for that user.
+
+2.  **`accounts` (`IntObjectHashMap<UserCurrencyAccount>`)**:
+    *   This is a `Map` inside the `UserProfile`.
+    *   **Key**: `currency` code
+    *   **Value**: A `UserCurrencyAccount` object, which stores the user's financial information for a **specific currency**, including:
+        *   `balance`: The total balance.
+        *   `heldAmount`: The amount frozen for open orders.
+        *   The **available balance** is calculated as `balance - heldAmount`.
+
+### Summary: The Essence of `RiskEngine`
+
+The `RiskEngine` is essentially an **in-memory, high-performance state machine for accounts and positions**.
+
+*   Through its **hold mechanism (`heldAmount`)**, it ensures that a user's funds are safely reserved before an order enters the "black box" of the matching engine.
+*   Through its **two-stage processing (`preProcessCommand` and `handlerRiskRelease`)**, it guarantees that no matter the matching outcome (full fill, partial fill, or no fill), the user's final account state remains perfectly consistent with the result.
+
+This design makes the `RiskEngine` the **cornerstone of financial security** for the entire trading system.
