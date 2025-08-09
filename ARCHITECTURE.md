@@ -311,3 +311,66 @@ The `RiskEngine` is essentially an **in-memory, high-performance state machine f
 *   Through its **two-stage processing (`preProcessCommand` and `handlerRiskRelease`)**, it guarantees that no matter the matching outcome (full fill, partial fill, or no fill), the user's final account state remains perfectly consistent with the result.
 
 This design makes the `RiskEngine` the **cornerstone of financial security** for the entire trading system.
+
+---
+
+## Component Deep Dive: MatchingEngineRouter
+
+The `MatchingEngineRouter` is the **third gate** in the Disruptor pipeline and the "heart" of the entire trading system, responsible for executing the core function of **order matching**.
+
+If the `RiskEngine` is the "treasurer," then the `MatchingEngineRouter` is the "trader." Its responsibilities sound simple but are implemented with great subtlety.
+
+### Core Responsibilities: Routing and Matching
+
+The name `MatchingEngineRouter` encompasses its two core duties:
+
+1.  **Router**:
+    *   A system can have hundreds or thousands of trading pairs (BTC/USDT, ETH/USDT, ...). Each pair has its own independent **Order Book**.
+    *   The primary task of the `MatchingEngineRouter` is to act like a traffic controller, **dispatching** an order to the correct order book based on the `symbolId` in the `OrderCommand`.
+    *   It maintains an internal `Map` where the `key` is the `symbolId` and the `value` is the corresponding `IOrderBook` instance.
+
+2.  **Matching Engine**:
+    *   Once an order is dispatched to a specific `IOrderBook` instance, the real matching logic begins.
+    *   An `IOrderBook` is a data structure that maintains all outstanding buy and sell orders for that symbol, sorted by price-time priority.
+    *   **Matching Process**:
+        *   **Is the new order a buy?**: It looks for the lowest-priced sell order in the book. If the new order's bid price >= the lowest ask price, a match occurs! It continues to match against the next-lowest sell order until the order is fully filled or no more suitable counter-orders can be found.
+        *   **Is the new order a sell?**: It looks for the highest-priced buy order. If the new order's ask price <= the highest bid price, a match occurs! It then continues to the next-highest buy order.
+        *   **If no counter-order is found?**: The new order is placed on the order book, becoming a new Maker Order, waiting for another order to match with it.
+
+### Key Interactions of `MatchingEngineRouter`
+
+1.  **Receiving Input**:
+    *   It receives `OrderCommand`s that have already passed through the `RiskEngine` (risk checks) and `GroupingProcessor` (batching).
+    *   **Important**: It must wait for the **same** `OrderCommand` to be processed by both preceding processors before it can start. This is guaranteed by the Disruptor's `SequenceBarrier`.
+
+2.  **Processing Logic**:
+    *   **Check for "Short-Circuit" Signal**: Before doing anything, it checks the `resultCode` of the `OrderCommand`. If the `RiskEngine` has already marked the order as failed (e.g., `RISK_NSF`), the `MatchingEngineRouter` will **completely skip** all matching logic and pass the failed command on as-is.
+    *   **Execute Matching**: For valid orders, it calls the `match(OrderCommand)` method of the corresponding `IOrderBook`.
+    *   **Record Results**: During matching, the `IOrderBook` generates a series of **`MatcherTradeEvent`s**. These events detail every aspect of each match (whose order was filled, price, quantity, etc.). The `MatchingEngineRouter` links these events together like a linked list and attaches them to the `OrderCommand`.
+
+3.  **Producing Output**:
+    *   After processing, the `MatchingEngineRouter` passes the "enriched" `OrderCommand` (now containing the matching results) to the next and final stage of the pipeline: the `ResultsHandler`.
+
+### `IOrderBook` Implementations
+
+`exchange-core` provides two implementations of `IOrderBook`, which can be chosen based on requirements:
+
+*   **`OrderBookNaiveImpl`**:
+    *   A fully functional but relatively simple and straightforward implementation.
+    *   It uses a `NavigableMap` (based on a Red-Black Tree) to store orders, which is easy to understand and debug.
+    *   Its performance is relatively lower, making it suitable for functional testing or low-volume scenarios.
+
+*   **`OrderBookDirectImpl`**:
+    *   A highly complex implementation designed for extreme performance.
+    *   It uses **arrays** and **hash tables** to manage orders, avoiding the overhead of complex data structures.
+    *   Its memory layout is carefully designed to be CPU-cache-friendly, enabling extremely high matching speeds. This is the preferred choice for production environments.
+
+### Summary
+
+The `MatchingEngineRouter` is the central hub connecting **risk control** and **trade execution**.
+
+*   It acts as a **dispatcher**, ensuring every order finds its correct arena (the order book).
+*   It drives the **executor** (`IOrderBook`) to complete the core value exchange (order matching).
+*   It is also a **recorder**, clearly documenting every detail of a match in `MatcherTradeEvent`s, providing an immutable basis for downstream clearing and settlement.
+
+Its design embodies the Single Responsibility Principle: it only cares about "matching" and does it to perfection. It is not concerned with user balances (that's the `RiskEngine`'s job) or how the final result is communicated to the user (that's the `ResultsHandler`'s job).

@@ -311,3 +311,66 @@ flowchart TD
 *   它通过**两阶段处理（`preProcessCommand` 和 `handlerRiskRelease`）**，保证了无论撮合结果如何（完全成交、部分成交、未成交），用户的最终账户状态都能和撮合结果保持绝对一致。
 
 这种设计使得 `RiskEngine` 成为整个交易系统的**资金安全基石**。
+
+---
+
+## MatchingEngineRouter 组件深度解析
+
+`MatchingEngineRouter` 是 Disruptor 流水线中的**第三道关卡**，也是整个交易系统的“心脏”，负责执行最核心的**订单撮合**功能。
+
+如果说 `RiskEngine` 是“管钱的”，那么 `MatchingEngineRouter` 就是“管交易的”。它的职责听起来很简单，但实现起来非常精妙。
+
+### 核心职责：路由与撮合
+
+`MatchingEngineRouter` 的名字里包含了它的两个核心职责：
+
+1.  **Router (路由器)**:
+    *   系统里可能同时存在成百上千个交易对（BTC/USDT, ETH/USDT, ...）。每一个交易对都有一个自己独立的**订单簿 (Order Book)**。
+    *   `MatchingEngineRouter` 的首要任务，就是根据订单命令 (`OrderCommand`) 中的 `symbolId`（交易对ID），像一个交通警察一样，把这个订单**派发**给正确的订单簿去处理。
+    *   它内部维护了一个 `Map`，`key` 是 `symbolId`，`value` 就是对应交易对的 `IOrderBook` 实例。
+
+2.  **Matching Engine (撮合引擎)**:
+    *   当订单被派发到具体的 `IOrderBook` 实例后，真正的撮合逻辑就开始了。
+    *   `IOrderBook` 是一个数据结构，它维护了该交易对所有未成交的买单和卖单，并按价格优先、时间优先的原则排序。
+    *   **撮合过程**:
+        *   **新订单是买单？**: 就去订单簿里找价格最低的卖单。如果新订单的出价 >= 最低卖价，成交！然后继续找下一个最低卖价的卖单，直到订单完全成交，或者再也找不到价格合适的对手单。
+        *   **新订单是卖单？**: 就去订单簿里找价格最高的买单。如果新订单的要价 <= 最高买价，成交！然后继续找下一个最高买价的买单。
+        *   **如果找不到对手单？**: 那么这个新订单就会被留在订单簿里，成为新的挂单 (Maker Order)，等待别人来和它成交。
+
+### `MatchingEngineRouter` 的关键交互
+
+1.  **接收输入**:
+    *   它从 `RiskEngine` 和 `GroupingProcessor` 接收已经通过了“风险检查”和“批次划分”的 `OrderCommand`。
+    *   **重要**: 它必须等待**同一个** `OrderCommand` 被前两个处理器都处理完毕后才能开始工作，这是由 Disruptor 的 `SequenceBarrier` 保证的。
+
+2.  **处理逻辑**:
+    *   **检查“短路”信号**: 在做任何事情之前，它会先检查 `OrderCommand` 的 `resultCode`。如果 `RiskEngine` 已经把这个订单标记为失败（比如 `RISK_NSF`），`MatchingEngineRouter` 会**完全跳过**所有撮合逻辑，直接把这个失败的命令原样传递下去。
+    *   **执行撮合**: 对于合法的订单，它会调用相应 `IOrderBook` 的 `match(OrderCommand)` 方法。
+    *   **记录结果**: `IOrderBook` 在撮合过程中，会产生一系列的**交易事件 (`MatcherTradeEvent`)**。这些事件详细记录了每一笔撮合的细节（成交了谁的订单、成交价格、成交数量等）。`MatchingEngineRouter` 会把这些事件像链表一样串起来，挂在 `OrderCommand` 上。
+
+3.  **产生输出**:
+    *   处理完成后，`MatchingEngineRouter` 会将这个被“丰富”了的 `OrderCommand`（现在它包含了撮合结果）传递给流水线的下一个、也是最后一个阶段：`ResultsHandler`。
+
+### 订单簿 (`IOrderBook`) 的实现
+
+`exchange-core` 提供了两种 `IOrderBook` 的实现，可以根据需要选择：
+
+*   **`OrderBookNaiveImpl`**:
+    *   一个功能完整、但相对简单直观的实现。
+    *   内部使用 `NavigableMap` (基于红黑树) 来存储订单，易于理解和调试。
+    *   性能相对较低，适合功能验证或交易量不大的场景。
+
+*   **`OrderBookDirectImpl`**:
+    *   一个为极致性能而设计的、非常复杂的实现。
+    *   它使用**数组**和**哈希表**来管理订单，避免了复杂数据结构带来的开销。
+    *   内存布局经过精心设计，对 CPU 缓存非常友好，可以达到极高的撮合速度。这是生产环境中的首选。
+
+### 总结
+
+`MatchingEngineRouter` 是连接**风险控制**和**交易执行**的核心枢纽。
+
+*   它扮演着**分发者**的角色，确保每个订单都能找到自己的战场（订单簿）。
+*   它驱动着**执行者** (`IOrderBook`)，完成最核心的价值交换（订单撮合）。
+*   它还是一个**记录员**，把撮合的每一个细节都清晰地记录在 `MatcherTradeEvent` 中，为下游的清算和结算提供不可篡改的依据。
+
+它的设计体现了单一职责原则：它只关心“撮合”这一件事，并把它做到极致。它不关心用户余额（这是 `RiskEngine` 的事），也不关心最终结果如何通知用户（这是 `ResultsHandler` 的事）。
