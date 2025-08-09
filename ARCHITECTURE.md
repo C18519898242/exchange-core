@@ -203,9 +203,28 @@ Let's delve into its mechanics:
     *   This `Sequence` update triggers the `SequenceBarrier`, letting the downstream `RiskEngine` know: "All commands from the end of the last batch to this point are ready; you can start processing them."
 
 3.  **Batch Boundaries**
-    There are two main conditions that trigger a batch "flush":
-    *   **Size Threshold**: When the number of accumulated commands reaches `ExchangeConfiguration.ordersProcessing.groupingMaxBatchSize`, a flush is triggered.
-    *   **Time Threshold**: To prevent commands from being indefinitely delayed under high load, the system periodically sends a `GROUPING_FLUSH_SIGNAL`. This signal acts like an alarm clock, telling the `GroupingProcessor`: "No matter how many commands you've gathered, package them up and send them off immediately." This ensures an upper bound on latency.
+    There are two main conditions that trigger a batch "flush", both implemented within the `processEvents()` method of `GroupingProcessor.java`:
+
+    *   **Size Threshold**: While processing events, if the number of accumulated commands in a batch (`msgsInGroup`) reaches the limit (`msgsInGroupLimit`), the processor forces a switch to the next batch.
+        ```java
+        if (msgsInGroup >= msgsInGroupLimit && cmd.command != OrderCommandType.PERSIST_STATE_RISK) {
+            groupCounter++;
+            msgsInGroup = 0;
+        }
+        ```
+
+    *   **Time Threshold**: When there are no new events in the `RingBuffer` and the processor is idle, it checks an internal timer. If the current time has exceeded the maximum waiting time for the batch (`groupLastNs`), it forces the current batch to end, preventing excessive command latency.
+        ```java
+        } else {
+            // Executes when the processor is idle
+            final long t = System.nanoTime();
+            if (msgsInGroup > 0 && t > groupLastNs) {
+                // Switch group if time expired and batch is not empty
+                groupCounter++;
+                msgsInGroup = 0;
+            }
+        }
+        ```
 
 **Summary**
 `GroupingProcessor` is a classic **batch processing** optimization. It sacrifices the **lowest possible latency** for a single command (as it has to wait to be grouped) in exchange for **higher overall system throughput**. In scenarios like financial trading, which require handling a massive volume of concurrent requests, this trade-off is very common and effective. It forms Stage 1 along with `RiskEngine`, preparing batches of pre-processed commands for the subsequent matching stage.

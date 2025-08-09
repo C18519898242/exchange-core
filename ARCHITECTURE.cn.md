@@ -203,9 +203,28 @@ flowchart TD
     *   这个 `Sequence` 的更新会触发 `SequenceBarrier`，从而让下游的 `RiskEngine` 知道：“从上一个批次的结束点到现在这个点，所有的命令都准备好了，你可以开始处理了。”
 
 3.  **分组的边界**
-    分组的触发条件主要有两种：
-    *   **数量阈值**: 当累积的命令数量达到 `ExchangeConfiguration.ordersProcessing.groupingMaxBatchSize` 时，就触发一次“刷盘”（Flush）。
-    *   **时间阈值**: 为了避免在高负载时命令被无限期延迟，系统会定期发送一个 `GROUPING_FLUSH_SIGNAL`。这个信号就像一个闹钟，告诉 `GroupingProcessor`：“不管你现在攒了多少命令，都立刻打包发走”。这确保了延迟的上限。
+    分组的触发条件主要有两种，它们都在 `GroupingProcessor.java` 的 `processEvents()` 方法中实现：
+
+    *   **数量阈值**: 在处理事件时，如果一个批次内累积的命令数 (`msgsInGroup`) 达到上限 (`msgsInGroupLimit`)，处理器会强制切换到下一个批次。
+        ```java
+        if (msgsInGroup >= msgsInGroupLimit && cmd.command != OrderCommandType.PERSIST_STATE_RISK) {
+            groupCounter++;
+            msgsInGroup = 0;
+        }
+        ```
+
+    *   **时间阈值**: 当 `RingBuffer` 中没有新事件，处理器处于等待状态时，它会检查内部计时器。如果当前时间已超过本批次的最长等待时间 (`groupLastNs`)，它会强制结束当前批次，以避免命令被过度延迟。
+        ```java
+        } else {
+            // 当处理器空闲时执行
+            final long t = System.nanoTime();
+            if (msgsInGroup > 0 && t > groupLastNs) {
+                // 如果等待时间超时且批次不为空，则切换批次
+                groupCounter++;
+                msgsInGroup = 0;
+            }
+        }
+        ```
 
 **总结**
 `GroupingProcessor` 是一个典型的“**批处理**”优化。它牺牲了单个命令的**最低延迟**（因为命令需要等待成组），来换取整个系统**更高的总吞t量**。在金融交易这种需要处理海量并发请求的场景下，这种权衡是非常常见且有效的。它和 `RiskEngine` 一起构成了 Stage 1，为后续的撮合阶段准备好了一批批经过预处理的命令。
