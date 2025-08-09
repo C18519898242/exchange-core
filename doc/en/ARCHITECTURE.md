@@ -370,3 +370,37 @@ The `MatchingEngineRouter` is the central hub connecting **risk control** and **
 *   It is also a **recorder**, clearly documenting every detail of a match in `MatcherTradeEvent`s, providing an immutable basis for downstream clearing and settlement.
 
 Its design embodies the Single Responsibility Principle: it only cares about "matching" and does it to perfection. It is not concerned with user balances (that's the `RiskEngine`'s job) or how the final result is communicated to the user (that's the `ResultsHandler`'s job).
+
+---
+
+## Component Deep Dive: ResultsHandler (Stage 3)
+
+The `ResultsHandler` is the **final stage** of the entire matching process. Its core responsibility is very clear: **to take the fully processed command results and market events from the Disruptor Ring Buffer and deliver them to the outside world.**
+
+You can think of it as the "exit" or "loudspeaker" of the matching engine. All internal processing (risk checks, matching, settlement) is complete, and the `ResultsHandler` is responsible for publishing the final results.
+
+### 1. Core Functionality
+
+The core functionality of the `ResultsHandler` is implemented in its `onEvent` method, which primarily does two things:
+
+1.  **Handle Grouping Control Commands (`GROUPING_CONTROL`)**:
+    *   This is a special internal command used to control whether the `ResultsHandler` should process events.
+    *   If a `GROUPING_CONTROL` command is received, it checks the `orderId` field to enable or disable event processing.
+    *   This mechanism is mainly used for **batch processing and the two-step processing model** of the matching engine. In some scenarios, the system needs to process a batch of related commands (e.g., an IOC order and all the trade events it triggers) completely before publishing the results externally, ensuring consistency for external observers. `GROUPING_CONTROL` is used to mark the "start" and "end" of such a batch.
+
+2.  **Consume Final Results (`resultsConsumer.accept`)**:
+    *   If event processing is enabled, the `ResultsHandler` calls the `resultsConsumer`.
+    *   The `resultsConsumer` is a **consumer function** injected via the constructor. This function is where the results are actually handled.
+    *   In the `ExchangeCore` implementation, this `resultsConsumer` is typically the `DisruptorExceptionHandler`, which delivers the processing result (success or failure code) and market events (trades, rejections, cancellations) back to the original API caller via a `CompletableFuture` or pushes them to market data subscribers via the `IEventsHandler` interface.
+
+### 2. Position in the Overall Flow
+
+The `ResultsHandler` is at the end of the processing flow. When a command has passed through all preceding stages (grouping, risk control, matching), it finally reaches the `ResultsHandler`. By this point, the `OrderCommand` object contains all the processing results. The `ResultsHandler` passes this complete `OrderCommand` object to the `resultsConsumer`, which then notifies the API caller and broadcasts market data.
+
+### 3. Summary
+
+The `ResultsHandler` is the endpoint of the matching process. Its role can be summarized as:
+
+1.  **Final Exit**: It is the sole channel through which all command results and market events leave the Disruptor Ring Buffer.
+2.  **Flow Control**: Through the `GROUPING_CONTROL` command, it allows for fine-grained control over event publication, supporting batch and atomic result delivery.
+3.  **Decoupling**: It decouples the logic of "how to handle results" (`resultsConsumer`) from the processing flow itself. The `ResultsHandler` is only concerned with "when" and "if" to publish, while the `resultsConsumer` is responsible for "how" to publish.

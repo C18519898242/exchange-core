@@ -370,3 +370,37 @@ flowchart TD
 *   它还是一个**记录员**，把撮合的每一个细节都清晰地记录在 `MatcherTradeEvent` 中，为下游的清算和结算提供不可篡改的依据。
 
 它的设计体现了单一职责原则：它只关心“撮合”这一件事，并把它做到极致。它不关心用户余额（这是 `RiskEngine` 的事），也不关心最终结果如何通知用户（这是 `ResultsHandler` 的事）。
+
+---
+
+## ResultsHandler (结果处理器) - 阶段 3 深度解析
+
+`ResultsHandler` 是整个撮合流程的 **最后一个环节**。它的核心职责非常明确：**将处理完成的命令结果和市场事件，从Disruptor环形缓冲区（Ring Buffer）中取出，并传递给外部世界**。
+
+您可以把它理解为撮合引擎的“出口”或“扬声器”。所有内部处理（风险检查、撮合、资金结算）都已完成，`ResultsHandler` 负责将最终结果发布出去。
+
+### 1. 核心功能
+
+`ResultsHandler` 的核心功能由 `onEvent` 方法实现。这个方法主要做两件事：
+
+1.  **处理分组控制命令 (`GROUPING_CONTROL`)**:
+    *   这是一个特殊的内部命令，用于控制 `ResultsHandler` 是否应该处理事件。
+    *   如果收到的命令是 `GROUPING_CONTROL`，它会检查 `orderId` 字段来开启或关闭事件处理。
+    *   这个机制主要用于 **撮合引擎的批量处理和两阶段处理模式**。在某些场景下，系统需要先将一批相关的命令（例如，一个IOC订单和它引发的所有成交事件）全部处理完毕，然后再统一对外发布结果，以保证外部观察到的一致性。`GROUPING_CONTROL` 就是用来标记这批命令的“开始”和“结束”的。
+
+2.  **消费最终结果 (`resultsConsumer.accept`)**:
+    *   如果事件处理是开启状态，`ResultsHandler` 就会调用 `resultsConsumer`。
+    *   `resultsConsumer` 是一个通过构造函数注入的 **消费者函数**。这个函数才是真正处理结果的地方。
+    *   在 `ExchangeCore` 的实现中，这个 `resultsConsumer` 通常就是 `DisruptorExceptionHandler`，它会将处理结果（成功或失败代码）、市场事件（成交、拒绝、撤单）等信息，通过 `CompletableFuture` 返回给最初调用API的客户端，或者通过 `IEventsHandler` 接口推送给行情订阅者。
+
+### 2. 在整个流程中的位置
+
+`ResultsHandler` 位于处理流程的终点。当命令流经所有前面的阶段（分组、风控、撮合）后，最终到达 `ResultsHandler`。此时，`OrderCommand` 对象已经包含了所有处理结果。`ResultsHandler` 将这个完整的 `OrderCommand` 对象传递给 `resultsConsumer`，由它来通知API调用者并广播市场行情。
+
+### 3. 总结
+
+`ResultsHandler` 是撮合流程的终点，其作用可以概括为：
+
+1.  **最终出口**: 它是所有命令处理结果和市场事件离开Disruptor环形缓冲区的唯一通道。
+2.  **流量控制**: 通过 `GROUPING_CONTROL` 命令，它可以实现对事件发布的精细控制，支持批量和原子性的结果发布。
+3.  **解耦**: 它将“如何处理结果”的逻辑（`resultsConsumer`）与处理流程本身解耦。`ResultsHandler` 只负责“何时”和“是否”发布，而 `resultsConsumer` 负责“如何”发布。
