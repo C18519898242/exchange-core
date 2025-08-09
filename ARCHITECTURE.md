@@ -265,6 +265,12 @@ The `RiskEngine` is a **mandatory stop** for almost all commands before they rea
     *   **Checks**: Verifies the user exists.
     *   **Processing**: Directly modifies the user's `balance`. This is a purely administrative action that does not proceed to the matching engine.
 
+#### A Note on "Market Buy by Quantity"
+
+The `RiskEngine` is designed to strictly differentiate between "by amount" and "by quantity" market orders. To understand the challenges, design trade-offs, and the final best-practice solution for the complex "Market Buy by Quantity" feature, please refer to the dedicated deep-dive document:
+
+*   **[Deep Dive: Designing and Implementing Market Buy by Quantity](./DEEP_DIVE_MARKET_BUY_BY_QUANTITY.md)**
+
 ### Core Data Structures
 
 All of `RiskEngine`'s logic revolves around two core, in-memory `Map`s (specifically `LongObjectHashMap` for performance):
