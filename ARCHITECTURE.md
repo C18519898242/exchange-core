@@ -74,7 +74,31 @@ This is the high-performance, low-latency core of the system, built on the LMAX 
 
 *   **RingBuffer**: The central data structure of the Disruptor framework. It's a pre-allocated circular buffer where `OrderCommand` objects live. All processing stages (processors) operate on the objects directly within this buffer, which enables lock-free, high-throughput communication between components.
 
-*   **GroupingProcessor (Stage 1)**: This is the first processor in the pipeline. Its primary function is to batch incoming commands into groups. This is a performance optimization that improves throughput by reducing the overhead of processing each command individually. Groups are formed based on a configurable size limit or a time-based threshold.
+*   **GroupingProcessor (Stage 1)**: 
+    `GroupingProcessor` is the **first processor** in the Disruptor pipeline and serves as a critical **performance optimization component**. Its core idea is simple: **aggregate individual commands into batches and then pass the entire batch to the next processor.**
+
+    This is like ordering at a fast-food restaurant. If the kitchen prepares one burger for every single customer order, it's inefficient. But if the cashier (`GroupingProcessor`) collects orders for 10 consecutive burgers and hands them to the kitchen (`RiskEngine`) all at once, the kitchen can operate like an assembly line, greatly improving efficiency.
+
+    Let's delve into its mechanics:
+
+    1.  **Objective: Increase Throughput**
+        *   In ultra-low-latency systems, the fixed overhead of processing a single event (like method calls, cache misses, etc.) can become significant.
+        *   By grouping commands, `GroupingProcessor` "amortizes" the processing cost over multiple commands. Downstream processors (like `RiskEngine`) only need to be woken up once to handle a batch of commands, rather than once for each command. This drastically reduces context switching and inter-processor communication overhead, thereby significantly boosting the system's overall throughput.
+
+    2.  **How It Works**
+        *   `GroupingProcessor` receives an `OrderCommand` from the `RingBuffer` in its `onEvent` method.
+        *   It does **not** immediately pass this command on; instead, it holds onto it.
+        *   It checks if the command is a "**trigger signal**." In `exchange-core`, this is typically a `GROUPING_FLUSH_SIGNAL` command or a special `endOfBatch` flag.
+        *   When `GroupingProcessor` receives a trigger signal, or the number of held commands reaches a preset threshold (`groupingMaxBatchSize`), or the waiting time exceeds a certain threshold (`groupingMaxBatchDelayNs`), it marks the end of the current batch of accumulated commands and then updates its `Sequence`.
+        *   This `Sequence` update triggers the `SequenceBarrier`, letting the downstream `RiskEngine` know: "All commands from the end of the last batch to this point are ready; you can start processing them."
+
+    3.  **Batch Boundaries**
+        There are two main conditions that trigger a batch "flush":
+        *   **Size Threshold**: When the number of accumulated commands reaches `ExchangeConfiguration.ordersProcessing.groupingMaxBatchSize`, a flush is triggered.
+        *   **Time Threshold**: To prevent commands from being indefinitely delayed under high load, the system periodically sends a `GROUPING_FLUSH_SIGNAL`. This signal acts like an alarm clock, telling the `GroupingProcessor`: "No matter how many commands you've gathered, package them up and send them off immediately." This ensures an upper bound on latency.
+
+    **Summary**
+    `GroupingProcessor` is a classic **batch processing** optimization. It sacrifices the **lowest possible latency** for a single command (as it has to wait to be grouped) in exchange for **higher overall system throughput**. In scenarios like financial trading, which require handling a massive volume of concurrent requests, this trade-off is very common and effective. It forms Stage 1 along with `RiskEngine`, preparing batches of pre-processed commands for the subsequent matching stage.
 
 *   **RiskEngine (Stage 1)**: The second processor, responsible for pre-trade risk management and user account state. It's a stateful component that maintains all user profiles, balances, and positions. When it receives a `PLACE_ORDER` command, it checks if the user has sufficient funds or margin to cover the order. It will reject any command that fails these risk checks. It also handles administrative tasks like balance adjustments and user creation.
 
@@ -90,8 +114,6 @@ This is the high-performance, low-latency core of the system, built on the LMAX 
 ---
 
 ## API Usage: `ExchangeApi` Deep Dive
-
-### English
 
 The `ExchangeApi` class serves as the entry point and facade for the entire trading core. It provides a clear, user-friendly interface for external clients, abstracting away the complexities of the underlying Disruptor framework. Its key responsibilities include:
 
@@ -124,42 +146,7 @@ The standard way to interact with the API asynchronously is:
 
 ---
 
-### 中文
-
-`ExchangeApi` 类是整个交易核心的入口和门面（Facade）。它为外部客户端提供了一套清晰、易于使用的接口，同时将底层 Disruptor 框架的复杂性抽象出来。其核心职责包括：
-
-1.  **API 门面**: 它封装了与 Disruptor `RingBuffer` 交互的复杂性。开发者只需调用如 `submitCommand(ApiPlaceOrder cmd)` 这样的简单方法，而无需理解内部机制。
-2.  **命令翻译与发布**: 它的核心任务是将 `ApiCommand` 对象翻译成内部的 `OrderCommand` 格式。它使用预定义的 `EventTranslator` 将字段复制到 `RingBuffer` 上的一个预分配 `OrderCommand` 对象中，然后发布它，使其对处理流水线可见。
-3.  **异步结果处理**: 对于异步调用，`ExchangeApi` 维护一个 `promises` 映射。它根据命令的序列号存储一个 `CompletableFuture` 的回调。当命令处理完毕，`ResultsHandler` 会调用 `ExchangeApi.processResult()`，该方法会找到对应的回调并完成 `Future`，从而将结果传递给原始调用者。
-
-#### `submitCommandAsync` 与 `submitCommandAsyncFullResponse` 的区别
-
-核心区别在于 `CompletableFuture` 返回的信息量：
-
-*   **`submitCommandAsync`**:
-    *   **返回**: `CompletableFuture<CommandResultCode>`
-    *   **内容**: 仅包含最终的状态码（如 `SUCCESS`, `RISK_NSF` 等）。
-    *   **应用场景**: 当您只关心操作是否成功，而不需要其副作用的细节时，这是理想的选择。
-
-*   **`submitCommandAsyncFullResponse`**:
-    *   **返回**: `CompletableFuture<OrderCommand>`
-    *   **内容**: 整个处理完毕的 `OrderCommand` 对象，包含 `resultCode`、`MatcherTradeEvent` 链（交易明细）以及可能的 `L2MarketData`。
-    *   **应用场景**: 当您需要操作结果的全部细节时（例如市价单的平均成交价和每笔成交详情），此方法是必需的。
-
-#### 异步使用模式
-
-与 API 进行异步交互的标准方式是：
-
-1.  **调用 `async` 方法**: `CompletableFuture<OrderCommand> future = exchangeApi.submitCommandAsyncFullResponse(placeOrderCmd);`
-2.  **处理 `Future`**:
-    *   **阻塞式等待 (用于测试)**: `OrderCommand result = future.join();`
-    *   **非阻塞式回调 (推荐)**: `future.thenAccept(result -> { /* 在此处理结果 */ });`
-
----
-
 ## Disruptor Pipeline Orchestration
-
-### English
 
 The `RingBuffer` itself is just a high-performance, lock-free circular queue responsible for storing and passing data (in this case, `OrderCommand` objects). **It does not directly "orchestrate" the stages; instead, this is achieved through a mechanism called a "Dependency Barrier."**
 
@@ -217,62 +204,3 @@ This orchestration process is defined in the `ExchangeCore` constructor, which c
 The `RingBuffer` is like a physical assembly line conveyor belt, while **orchestration is implemented via the `SequenceBarrier`**. Each `SequenceBarrier` acts like a "checkpoint" on the assembly line, ensuring that a part (`OrderCommand`) can only move to the next station after all previous stations (dependent processors) have completed their work on it.
 
 In this way, Disruptor elegantly defines the dependencies and execution order among processors, achieving an efficient, lock-free, parallel, and serial processing flow.
-
-### 中文
-
-`RingBuffer` 本身只是一个高性能的、无锁的环形队列，它负责存储和传递数据（在这里是 `OrderCommand` 对象）。**它本身并不直接“编排”各个 Stage，而是通过一种叫做“依赖屏障”（Dependency Barrier）的机制来实现的。**
-
-这个编排过程是在 `ExchangeCore` 的构造函数中定义的，我们可以把它想象成一个“依赖关系图”的构建过程。让我们来梳理一下：
-
-1.  **基本概念：Sequence 和 Barrier**
-    *   **Sequence**: 每个处理器（Processor）都有一个自己的 `Sequence` 对象。这可以看作是这个处理器当前处理到了 `RingBuffer` 中的哪个位置（序列号）的“计数器”。
-    *   **SequenceBarrier**: 这是一个“屏障”。一个处理器在处理下一个数据之前，必须等待它所依赖的所有前置处理器的 `Sequence` 都越过这个数据的位置。这个屏障确保了处理器不会处理尚未被其前置依赖处理过的数据。
-
-2.  **编排 Stage 1, 2, 3 的过程**
-    在 `ExchangeCore.java` 中，您会看到类似这样的代码（这是 LMAX Disruptor 的标准设置模式）：
-    ```java
-    // 1. 从 RingBuffer 创建一个初始屏障，所有第一阶段的处理器都依赖它
-    SequenceBarrier barrier1 = ringBuffer.newBarrier();
-
-    // 2. 创建 Stage 1 的处理器 (Grouping, Risk)，它们都等待 barrier1
-    //    - GroupingProcessor(barrier1)
-    //    - RiskEngine(barrier1)
-    //    这两个处理器可以并行执行，因为它们没有相互依赖，只依赖 RingBuffer 的原始数据。
-
-    // 3. 创建 Stage 2 的屏障，它等待 Stage 1 的所有处理器完成
-    //    这个屏障会跟踪 GroupingProcessor 和 RiskEngine 的 Sequence
-    SequenceBarrier barrier2 = ringBuffer.newBarrier(
-        groupingProcessor.getSequence(), 
-        riskEngine.getSequence()
-    );
-
-    // 4. 创建 Stage 2 的处理器 (MatchingEngine)，它等待 barrier2
-    //    - MatchingEngineRouter(barrier2)
-    //    这意味着 MatchingEngineRouter 必须等到 GroupingProcessor 和 RiskEngine 
-    //    都处理完同一个 OrderCommand 后，才能开始处理它。
-
-    // 5. 创建 Stage 3 的屏障，它等待 Stage 2 的处理器完成
-    SequenceBarrier barrier3 = ringBuffer.newBarrier(
-        matchingEngineRouter.getSequence()
-    );
-
-    // 6. 创建 Stage 3 的处理器 (ResultsHandler)，它等待 barrier3
-    //    - ResultsHandler(barrier3)
-    ```
-
-3.  **工作流程（以一个 `OrderCommand` 为例）**
-    *   **发布**: `ExchangeApi` 将一个 `OrderCommand` 发布到 `RingBuffer` 的序列号 `N`。
-    *   **Stage 1**:
-        *   `GroupingProcessor` 和 `RiskEngine` 都在等待 `barrier1`。一旦序列号 `N` 可用，它们俩都可以开始处理 `RingBuffer[N]` 里的这个命令。
-        *   它们各自完成处理后，会更新自己的 `Sequence` 到 `N`。
-    *   **Stage 2**:
-        *   `MatchingEngineRouter` 在等待 `barrier2`。`barrier2` 会检查 `GroupingProcessor` 和 `RiskEngine` 的 `Sequence`。只有当这两个 `Sequence` 都达到或超过 `N` 时，`barrier2` 才会放行。
-        *   `barrier2` 放行后，`MatchingEngineRouter` 开始处理 `RingBuffer[N]` 的命令。处理完成后，它也更新自己的 `Sequence` 到 `N`。
-    *   **Stage 3**:
-        *   `ResultsHandler` 在等待 `barrier3`。`barrier3` 检查 `MatchingEngineRouter` 的 `Sequence`。一旦它达到 `N`，`barrier3` 就放行。
-        *   `ResultsHandler` 开始处理，并最终完成对这个命令的所有操作。
-
-**总结**
-`RingBuffer` 就像一条物理的流水线传送带，而**编排是通过 `SequenceBarrier` 实现的**。每个 `SequenceBarrier` 都像流水线上的一个“检查点”，它确保只有在所有前序工位（依赖的处理器）都完成了对某个零件（`OrderCommand`）的操作后，这个零件才能流转到下一个工位。
-
-通过这种方式，Disruptor 巧妙地定义了处理器之间的依赖关系和执行顺序，实现了高效的、无锁的并行和串行处理流程。
