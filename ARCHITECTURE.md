@@ -161,22 +161,118 @@ The standard way to interact with the API asynchronously is:
 
 ### English
 
-The `RingBuffer` itself is just a high-performance queue. It does not directly "orchestrate" the stages. The orchestration is defined in `ExchangeCore.java` using a mechanism called a **Dependency Barrier**.
+The `RingBuffer` itself is just a high-performance, lock-free circular queue responsible for storing and passing data (in this case, `OrderCommand` objects). **It does not directly "orchestrate" the stages; instead, this is achieved through a mechanism called a "Dependency Barrier."**
 
-1.  **Concept**: Each processor (like `RiskEngine`) has a `Sequence` counter. A `SequenceBarrier` ensures that a processor cannot process an item from the `RingBuffer` until all of its prerequisite processors (its dependencies) have finished processing that same item.
-2.  **Orchestration in `ExchangeCore`**: The constructor of `ExchangeCore` sets up a dependency graph.
-    *   It first creates a barrier for Stage 1 processors (`GroupingProcessor`, `RiskEngine`), allowing them to run in parallel.
-    *   It then creates a second barrier for the Stage 2 processor (`MatchingEngineRouter`) that waits for *all* Stage 1 processors to complete.
-    *   Finally, it creates a third barrier for the Stage 3 processor (`ResultsHandler`) that waits for Stage 2 to complete.
-3.  **Workflow**: This setup creates a processing pipeline. An `OrderCommand` is processed by Stage 1, then the barriers ensure it's passed to Stage 2, and finally to Stage 3, in a highly efficient, lock-free manner.
+This orchestration process is defined in the `ExchangeCore` constructor, which can be thought of as building a "dependency graph." Let's break it down:
+
+1.  **Core Concepts: Sequence and Barrier**
+    *   **Sequence**: Each processor has its own `Sequence` object. This acts as a "counter" for the position (sequence number) in the `RingBuffer` that the processor has currently handled.
+    *   **SequenceBarrier**: This is a barrier. Before processing the next item, a processor must wait for the `Sequence` of all its prerequisite processors to advance past that item's position. This barrier ensures that a processor does not handle data that has not yet been processed by its dependencies.
+
+2.  **Orchestrating Stages 1, 2, and 3**
+    In `ExchangeCore.java`, you will see code like this (this is the standard LMAX Disruptor setup pattern):
+    ```java
+    // 1. Create an initial barrier from the RingBuffer, which all Stage 1 processors depend on.
+    SequenceBarrier barrier1 = ringBuffer.newBarrier();
+
+    // 2. Create Stage 1 processors (Grouping, Risk), both waiting for barrier1.
+    //    - GroupingProcessor(barrier1)
+    //    - RiskEngine(barrier1)
+    //    These two processors can execute in parallel as they have no dependency on each other, only on the raw data from the RingBuffer.
+
+    // 3. Create a Stage 2 barrier that waits for all Stage 1 processors to complete.
+    //    This barrier will track the Sequences of GroupingProcessor and RiskEngine.
+    SequenceBarrier barrier2 = ringBuffer.newBarrier(
+        groupingProcessor.getSequence(), 
+        riskEngine.getSequence()
+    );
+
+    // 4. Create the Stage 2 processor (MatchingEngine), which waits for barrier2.
+    //    - MatchingEngineRouter(barrier2)
+    //    This means MatchingEngineRouter must wait until both GroupingProcessor and RiskEngine
+    //    have finished processing the same OrderCommand before it can begin.
+
+    // 5. Create a Stage 3 barrier that waits for the Stage 2 processor to complete.
+    SequenceBarrier barrier3 = ringBuffer.newBarrier(
+        matchingEngineRouter.getSequence()
+    );
+
+    // 6. Create the Stage 3 processor (ResultsHandler), which waits for barrier3.
+    //    - ResultsHandler(barrier3)
+    ```
+
+3.  **Workflow (Example with one `OrderCommand`)**
+    *   **Publish**: `ExchangeApi` publishes an `OrderCommand` to sequence number `N` on the `RingBuffer`.
+    *   **Stage 1**:
+        *   `GroupingProcessor` and `RiskEngine` are both waiting for `barrier1`. Once sequence `N` is available, they can both start processing the command in `RingBuffer[N]`.
+        *   After they each finish processing, they update their own `Sequence` to `N`.
+    *   **Stage 2**:
+        *   `MatchingEngineRouter` waits for `barrier2`. `barrier2` checks the `Sequence` of both `GroupingProcessor` and `RiskEngine`. Only when both sequences have reached or surpassed `N` does `barrier2` give the green light.
+        *   Once cleared, `MatchingEngineRouter` processes the command at `RingBuffer[N]`. After completion, it updates its `Sequence` to `N`.
+    *   **Stage 3**:
+        *   `ResultsHandler` waits for `barrier3`. `barrier3` checks the `Sequence` of `MatchingEngineRouter`. Once it reaches `N`, `barrier3` gives the green light.
+        *   `ResultsHandler` begins processing, completing all operations for this command.
+
+**Summary**
+The `RingBuffer` is like a physical assembly line conveyor belt, while **orchestration is implemented via the `SequenceBarrier`**. Each `SequenceBarrier` acts like a "checkpoint" on the assembly line, ensuring that a part (`OrderCommand`) can only move to the next station after all previous stations (dependent processors) have completed their work on it.
+
+In this way, Disruptor elegantly defines the dependencies and execution order among processors, achieving an efficient, lock-free, parallel, and serial processing flow.
 
 ### 中文
 
-`RingBuffer` 本身只是一个高性能队列，它不直接“编排”各个阶段。真正的编排是在 `ExchangeCore.java` 中通过一种叫做**依赖屏障 (Dependency Barrier)** 的机制来定义的。
+`RingBuffer` 本身只是一个高性能的、无锁的环形队列，它负责存储和传递数据（在这里是 `OrderCommand` 对象）。**它本身并不直接“编排”各个 Stage，而是通过一种叫做“依赖屏障”（Dependency Barrier）的机制来实现的。**
 
-1.  **核心概念**: 每个处理器（如 `RiskEngine`）都有一个 `Sequence` 计数器。`SequenceBarrier` 确保一个处理器在处理 `RingBuffer` 中的某个数据项之前，其所有前置依赖处理器都已完成对该数据项的处理。
-2.  **在 `ExchangeCore` 中编排**: `ExchangeCore` 的构造函数构建了一个依赖关系图。
-    *   首先，它为第一阶段的处理器（`GroupingProcessor`, `RiskEngine`）创建一个屏障，允许它们并行运行。
-    *   然后，它为第二阶段的处理器（`MatchingEngineRouter`）创建第二个屏障，该屏障会等待**所有**第一阶段的处理器完成工作。
-    *   最后，它为第三阶段的处理器（`ResultsHandler`）创建第三个屏障，该屏障等待第二阶段完成。
-3.  **工作流程**: 这种设置创建了一个处理流水线。一个 `OrderCommand` 先由第一阶段处理，然后屏障确保它被传递到第二阶段，最后到第三阶段，整个过程高效且无锁。
+这个编排过程是在 `ExchangeCore` 的构造函数中定义的，我们可以把它想象成一个“依赖关系图”的构建过程。让我们来梳理一下：
+
+1.  **基本概念：Sequence 和 Barrier**
+    *   **Sequence**: 每个处理器（Processor）都有一个自己的 `Sequence` 对象。这可以看作是这个处理器当前处理到了 `RingBuffer` 中的哪个位置（序列号）的“计数器”。
+    *   **SequenceBarrier**: 这是一个“屏障”。一个处理器在处理下一个数据之前，必须等待它所依赖的所有前置处理器的 `Sequence` 都越过这个数据的位置。这个屏障确保了处理器不会处理尚未被其前置依赖处理过的数据。
+
+2.  **编排 Stage 1, 2, 3 的过程**
+    在 `ExchangeCore.java` 中，您会看到类似这样的代码（这是 LMAX Disruptor 的标准设置模式）：
+    ```java
+    // 1. 从 RingBuffer 创建一个初始屏障，所有第一阶段的处理器都依赖它
+    SequenceBarrier barrier1 = ringBuffer.newBarrier();
+
+    // 2. 创建 Stage 1 的处理器 (Grouping, Risk)，它们都等待 barrier1
+    //    - GroupingProcessor(barrier1)
+    //    - RiskEngine(barrier1)
+    //    这两个处理器可以并行执行，因为它们没有相互依赖，只依赖 RingBuffer 的原始数据。
+
+    // 3. 创建 Stage 2 的屏障，它等待 Stage 1 的所有处理器完成
+    //    这个屏障会跟踪 GroupingProcessor 和 RiskEngine 的 Sequence
+    SequenceBarrier barrier2 = ringBuffer.newBarrier(
+        groupingProcessor.getSequence(), 
+        riskEngine.getSequence()
+    );
+
+    // 4. 创建 Stage 2 的处理器 (MatchingEngine)，它等待 barrier2
+    //    - MatchingEngineRouter(barrier2)
+    //    这意味着 MatchingEngineRouter 必须等到 GroupingProcessor 和 RiskEngine 
+    //    都处理完同一个 OrderCommand 后，才能开始处理它。
+
+    // 5. 创建 Stage 3 的屏障，它等待 Stage 2 的处理器完成
+    SequenceBarrier barrier3 = ringBuffer.newBarrier(
+        matchingEngineRouter.getSequence()
+    );
+
+    // 6. 创建 Stage 3 的处理器 (ResultsHandler)，它等待 barrier3
+    //    - ResultsHandler(barrier3)
+    ```
+
+3.  **工作流程（以一个 `OrderCommand` 为例）**
+    *   **发布**: `ExchangeApi` 将一个 `OrderCommand` 发布到 `RingBuffer` 的序列号 `N`。
+    *   **Stage 1**:
+        *   `GroupingProcessor` 和 `RiskEngine` 都在等待 `barrier1`。一旦序列号 `N` 可用，它们俩都可以开始处理 `RingBuffer[N]` 里的这个命令。
+        *   它们各自完成处理后，会更新自己的 `Sequence` 到 `N`。
+    *   **Stage 2**:
+        *   `MatchingEngineRouter` 在等待 `barrier2`。`barrier2` 会检查 `GroupingProcessor` 和 `RiskEngine` 的 `Sequence`。只有当这两个 `Sequence` 都达到或超过 `N` 时，`barrier2` 才会放行。
+        *   `barrier2` 放行后，`MatchingEngineRouter` 开始处理 `RingBuffer[N]` 的命令。处理完成后，它也更新自己的 `Sequence` 到 `N`。
+    *   **Stage 3**:
+        *   `ResultsHandler` 在等待 `barrier3`。`barrier3` 检查 `MatchingEngineRouter` 的 `Sequence`。一旦它达到 `N`，`barrier3` 就放行。
+        *   `ResultsHandler` 开始处理，并最终完成对这个命令的所有操作。
+
+**总结**
+`RingBuffer` 就像一条物理的流水线传送带，而**编排是通过 `SequenceBarrier` 实现的**。每个 `SequenceBarrier` 都像流水线上的一个“检查点”，它确保只有在所有前序工位（依赖的处理器）都完成了对某个零件（`OrderCommand`）的操作后，这个零件才能流转到下一个工位。
+
+通过这种方式，Disruptor 巧妙地定义了处理器之间的依赖关系和执行顺序，实现了高效的、无锁的并行和串行处理流程。
