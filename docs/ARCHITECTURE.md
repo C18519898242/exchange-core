@@ -353,17 +353,13 @@ The name `MatchingEngineRouter` encompasses its two core duties:
 
 ### `IOrderBook` Implementations
 
-`exchange-core` provides two implementations of `IOrderBook`, which can be chosen based on requirements:
+`exchange-core` provides two implementations of `IOrderBook`, which have vastly different design philosophies and performance characteristics. To fully understand the internal workings, data structures, and performance trade-offs of these two implementations, please refer to the dedicated deep-dive document:
 
-*   **`OrderBookNaiveImpl`**:
-    *   A fully functional but relatively simple and straightforward implementation.
-    *   It uses a `NavigableMap` (based on a Red-Black Tree) to store orders, which is easy to understand and debug.
-    *   Its performance is relatively lower, making it suitable for functional testing or low-volume scenarios.
+*   **[Deep Dive: The Two Implementations of the Order Book](./DEEP_DIVE_ORDERBOOK.md)**
 
-*   **`OrderBookDirectImpl`**:
-    *   A highly complex implementation designed for extreme performance.
-    *   It uses **arrays** and **hash tables** to manage orders, avoiding the overhead of complex data structures.
-    *   Its memory layout is carefully designed to be CPU-cache-friendly, enabling extremely high matching speeds. This is the preferred choice for production environments.
+In short:
+*   **`OrderBookNaiveImpl`**: Uses a standard `TreeMap`, is easy to understand, and is suitable for getting started and for testing.
+*   **`OrderBookDirectImpl`**: Uses a custom linked list and radix tree, combined with object pooling, and is built for extreme performance, making it the preferred choice for production environments.
 
 ### Summary
 
