@@ -4,7 +4,7 @@
 
 ## 订单流图
 
-下图说明了命令从 API 到最终事件消费者的流转过程。
+下图说明了命令从 API 到最终事件消费者的流转过程，并包含了持久化和恢复机制。
 
 ```mermaid
 flowchart TD
@@ -16,46 +16,57 @@ flowchart TD
     subgraph 交易核心 [Disruptor RingBuffer]
         C{RingBuffer}
         
-        subgraph 阶段 1 [并行预处理]
+        subgraph 核心处理流水线
             direction LR
-            D[GroupingProcessor]
-            E[RiskEngine]
+            subgraph 阶段 1 [并行预处理]
+                direction LR
+                D[GroupingProcessor]
+                E[RiskEngine]
+            end
+
+            F[MatchingEngineRouter]
+            G[ResultsHandler]
         end
 
-        F[MatchingEngineRouter]
-        G[ResultsHandler]
+        subgraph 持久化与恢复 [并行]
+            direction TB
+            J[DiskSerializationProcessor]
+            J1["事务日志"]
+            J2["状态快照"]
+        end
     end
 
     %% Event Handling Nodes
     H[SimpleEventsProcessor]
     I{外部监听器}
-    I1[命令结果]
-    I2[交易事件]
-    I3[订单簿更新]
 
     %% Connections
     A -->|placeNewOrder| B;
     B -->|发布 OrderCommand| C;
+    
     C --> D;
     C --> E;
-    D -->|定义批次边界| F;
-    E -->|检查并冻结资金| F;
-    F -->|阶段 2 撮合| F;
-    F -->|阶段 3 结果| G;
-    G -->|onEvent 调用 consumer accept| H;
-    H -->|accept 触发| I;
-    I --> I1;
-    I --> I2;
-    I --> I3;
+    D --> F;
+    E --> F;
+    F --> G;
+    G --> H;
+    H --> I;
+
+    C -->|并行监听| J;
+    J --> J1;
+    J --> J2;
+
 
     %% Style Definitions
     classDef client fill:#cce5ff,stroke:#333,stroke-width:2px;
     classDef core fill:#fff2cc,stroke:#333,stroke-width:2px;
     classDef handling fill:#d4edda,stroke:#333,stroke-width:2px;
+    classDef persistence fill:#f8d7da,stroke:#333,stroke-width:2px;
 
     class A,B client;
     class C,D,E,F,G core;
-    class H,I,I1,I2,I3 handling;
+    class H,I handling;
+    class J,J1,J2 persistence;
 
     %% Clickable Links to Source Code
     click B "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/ExchangeApi.java" "Open ExchangeApi.java" _blank
@@ -64,6 +75,7 @@ flowchart TD
     click F "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/MatchingEngineRouter.java" "Open MatchingEngineRouter.java" _blank
     click G "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/ResultsHandler.java" "Open ResultsHandler.java" _blank
     click H "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/SimpleEventsProcessor.java" "Open SimpleEventsProcessor.java" _blank
+    click J "https://github.com/C18519898242/exchange-core/blob/master/src/main/java/exchange/core2/core/processors/journaling/DiskSerializationProcessor.java" "Open DiskSerializationProcessor.java" _blank
 ```
 
 ## 组件描述
@@ -92,6 +104,11 @@ flowchart TD
 *   **SimpleEventsProcessor**: 该组件充当主要的下游消费者。它从 `ResultsHandler` 接收处理过的 `OrderCommand`，并将内部复杂的的数据结构转换为适用于外部系统的干净、离散的事件。它“解包”命令以产生 `CommandResult`（高级别结果）、`TradeEvent`（详细交易信息）和 `OrderBook`（市场数据更新）。
 
 *   **外部监听器**: 这代表了 `SimpleEventsProcessor` 生成的事件的最终目的地。这些是订阅事件流以与交易所状态保持同步的客户端应用程序、数据库、UI 前端或分析系统。
+
+### 持久化与恢复
+*   **DiskSerializationProcessor**: 这是一个**并行**的、独立于核心处理流水线的处理器。它的存在是为了保证系统的**持久化**和**灾难恢复**能力，而不会拖慢核心交易的性能。
+    *   **事务日志 (Journaling)**: 它监听 `RingBuffer` 上的**每一个** `OrderCommand`，并将其序列化后以顺序写的方式记录到磁盘上的日志文件中。这确保了所有进入系统的命令都有记录可查。
+    *   **状态快照 (Snapshotting)**: 它会定期触发一个流程，让 `RiskEngine` 和 `MatchingEngineRouter` 将它们完整的内部状态（所有用户余额、所有订单簿）序列化成一个快照文件。当系统需要从灾难中恢复时，可以先加载最新的快照，然后只重放快照时间点之后的事务日志，从而大大缩短恢复时间。
 
 ---
 
