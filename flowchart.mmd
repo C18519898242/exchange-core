@@ -1,0 +1,16 @@
+flowchart TD
+    A[User API Client] -->|placeNewOrder| B[ExchangeApi];
+    B -->|Publishes OrderCommand| C{RingBuffer};
+    C -->|Stage 1 Pre-processing| D[GroupingProcessor];
+    D --> E[RiskEngine];
+    E -->|Stage 2 Matching| F[MatchingEngineRouter];
+    F -->|Processes matching| F;
+    F -->|Stage 3 Results| G[ResultsHandler];
+    G -->|onEvent calls consumer accept| H[SimpleEventsProcessor];
+    H -->|accept triggers| I{External Listeners};
+    I --> I1[CommandResult];
+    I --> I2[TradeEvent];
+    I --> I3[OrderBook Update];
+
+    style B fill:#f9f,stroke:#333,stroke-width:2px
+    style H fill:#ccf,stroke:#333,stroke-width:2px
