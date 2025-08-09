@@ -281,6 +281,22 @@ All of `RiskEngine`'s logic revolves around two core, in-memory `Map`s (specific
         *   `heldAmount`: The amount frozen for open orders.
         *   The **available balance** is calculated as `balance - heldAmount`.
 
+### Risk Validation Failure (The "Short-Circuit" Mechanism)
+
+When a `RiskEngine` validation fails, a **"short-circuit"** operation occurs. This is a critical performance and safety feature of the trading system.
+
+Here is the process:
+
+1.  **Set Rejection Code**: In the `preProcessCommand` method, if a `PLACE_ORDER` command fails validation for any reason (most commonly, insufficient funds or NSF), the `RiskEngine` immediately sets the `resultCode` on the `OrderCommand` object to a specific failure code, such as `RISK_NSF`.
+
+2.  **Skip Matching**: When the `MatchingEngineRouter` receives this command, it checks the `resultCode`. Seeing that the command has already been marked as failed, it **completely skips** all matching logic for it and passes the command "as-is" to the next stage.
+
+3.  **Maintain Process Integrity**: Even though the command is rejected, it **still completes its journey through the entire pipeline** instead of being removed midway. This ensures the Disruptor's `Sequence` mechanism is not disrupted and all processors remain synchronized.
+
+4.  **Provide Clear Feedback**: Ultimately, the `ResultsHandler` passes on the command with its failure code, and the client receives a precise reason for the failure (e.g., "insufficient funds") rather than a generic "processing error."
+
+This "short-circuit" mechanism is an elegant design for high-performance systems, as it quickly rejects invalid operations without compromising the integrity and consistency of the processing pipeline.
+
 ### Summary: The Essence of `RiskEngine`
 
 The `RiskEngine` is essentially an **in-memory, high-performance state machine for accounts and positions**.
