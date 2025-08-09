@@ -35,10 +35,22 @@
 
 日志记录了“过程”，而快照记录了“结果”。如果只有日志，那么在系统运行了很长时间后，恢复系统就需要重放海量的日志，会非常耗时。快照就是为了解决这个问题。
 
-*   **触发机制**: 快照的生成**不是由内部定时器自动触发的**，而是由**外部通过 API 调用来动态触发**。
-    *   **外部调用**: 运维脚本或管理服务通过调用 `ExchangeApi.java` 中的 `persistState(snapshotId)` 方法来发起一个快照请求。
-    *   **命令注入**: 该 API 调用会创建一个 `PERSIST_STATE_RISK` 或 `PERSIST_STATE_MATCHING` 类型的 `OrderCommand`，并将其发布到 `RingBuffer` 中。
-    *   **设计优势**: 这种设计将“执行快照”的能力和“决定何时快照”的策略解耦，允许运维人员在系统负载较低的时候（比如休市后）执行快照，避免影响交易高峰期的性能。
+*   **触发机制**: 快照的生成**不是由内部定时器自动触发的**，而是由**外部通过 API 调用来动态触发**。这个流程清晰地分离了“请求”和“执行”，具体步骤如下：
+
+    1.  **外部 API 调用**: 运维脚本或管理服务作为客户端，调用 `ExchangeApi.java` 中的 `persistState(snapshotId)` 方法。这个 `snapshotId` 通常是一个时间戳或一个唯一的序列号，它将成为新快照的唯一标识。
+
+    2.  **生成内部命令**: `persistState` 方法会创建一个 `PERSIST_STATE_MATCHING` 或 `PERSIST_STATE_RISK` 类型的 `OrderCommand`。这个命令就像一个指令，告诉撮合引擎或风控引擎：“请在处理到这个命令时，保存你们的当前状态。”
+
+    3.  **命令进入队列**: 这个 `OrderCommand` 被发布到系统核心的 `RingBuffer`（一个高性能队列）中，与其他交易命令（如下单、撤单）一起排队等待处理。这确保了快照操作与交易操作的严格顺序性。
+
+    4.  **核心引擎执行快照**:
+        *   当 `MatchingEngineRouter` 或 `RiskEngine` 从 `RingBuffer` 中消费到这个 `PERSIST_STATE_*` 命令时，它会暂停处理新的交易命令。
+        *   它会立即将自己**完整的内部状态**（例如，`MatchingEngineRouter` 会打包整个订单簿，而 `RiskEngine` 会打包所有用户账户信息）序列化成一个对象。
+        *   最后，它调用 `serializationProcessor.storeData()` 方法，将这个包含其完整状态的对象，连同 `snapshotId` 一起，交给 `DiskSerializationProcessor`。
+
+    5.  **`DiskSerializationProcessor` 写盘**: `DiskSerializationProcessor` 接收到状态对象和 `snapshotId` 后，负责将其压缩（使用 LZ4）并写入到一个新的快照文件（`.ecs` 文件）中。文件名会包含这个 `snapshotId`，以便将来恢复时能够精确查找。
+
+    这种设计将“执行快照”的能力和“决定何时快照”的策略完全解耦，允许运维人员在系统负载较低的时候（比如休市后）执行快照，从而避免影响交易高峰期的性能。
 
 *   **`storeData` (保存状态)**:
     *   当 `RiskEngine` 或 `MatchingEngineRouter` 收到 `PERSIST_STATE_*` 命令时，它们会把自己**完整的内部状态**（比如 `RiskEngine` 里的所有用户账户 `Map`）打包成一个可序列化的对象。
