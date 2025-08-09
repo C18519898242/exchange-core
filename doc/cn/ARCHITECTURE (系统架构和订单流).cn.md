@@ -69,14 +69,6 @@ flowchart TD
     class J,J1,J2 persistence;
 ```
 
-**组件索引:**
-*   [ExchangeApi](#component-exchangeapi)
-*   [GroupingProcessor](#component-groupingprocessor)
-*   [RiskEngine](#component-riskengine)
-*   [MatchingEngineRouter](#component-matchingenginerouter)
-*   [ResultsHandler](#component-resultshandler)
-*   [SimpleEventsProcessor](#component-simpleeventsprocessor)
-*   [DiskSerializationProcessor](#component-diskserializationprocessor)
 
 ## 组件描述
 
@@ -91,49 +83,49 @@ flowchart TD
 这是系统的高性能、低延迟核心，基于 LMAX Disruptor 模式构建。整个处理流水线在 `ExchangeCore.java` 类中进行配置和编排。
 *   **核心类**: `src/main/java/exchange/core2/core/ExchangeCore.java`
 
-### ExchangeApi <a name="component-exchangeapi"></a>
+### ExchangeApi
 
 面向公众的交易所网关。它提供了一个用户友好的 API，并负责将外部调用（例如 `placeNewOrder`）转换为内部的 `OrderCommand` 格式。然后，它将这些命令发布到 `RingBuffer` 上进行处理。
 *   **关键类位置**: `src/main/java/exchange/core2/core/ExchangeApi.java`
 
-### RingBuffer <a name="component-ringbuffer"></a>
+### RingBuffer
 
 Disruptor 框架的核心数据结构。它是一个预先分配的环形缓冲区，`OrderCommand` 对象存活于此。所有处理阶段（处理器）都直接操作此缓冲区中的对象，从而实现了组件之间无锁、高吞t量的通信。
 
-### GroupingProcessor (阶段 1, 并行) <a name="component-groupingprocessor"></a>
+### GroupingProcessor (阶段 1, 并行)
 
 作为阶段1的**并行处理器之一**，其主要功能是将传入的命令分组成批次。这是一种性能优化，通过减少处理每个命令的开销来提高吞吐量。它不关心命令的业务内容，只为下游定义“批次”的边界。
 *   **关键类位置**: `src/main/java/exchange/core2/core/processors/GroupingProcessor.java`
 
-### RiskEngine (阶段 1, 并行) <a name="component-riskengine"></a>
+### RiskEngine (阶段 1, 并行)
 
 作为阶段1的**另一个并行处理器**，负责交易前风险管理和用户账户状态。它是一个有状态的组件，对批次内的每个命令进行检查。当收到 `PLACE_ORDER` 命令时，它会检查用户是否有足够的资金或保证金来覆盖该订单。它将拒绝任何未通过这些风险检查的命令。
 *   **关键类位置**: `src/main/java/exchange/core2/core/processors/RiskEngine.java`
 
-### MatchingEngineRouter (阶段 2) <a name="component-matchingenginerouter"></a>
+### MatchingEngineRouter (阶段 2)
 
 **第二阶段**的处理器，是撮合逻辑的核心。它必须等待**同一个命令**被 `GroupingProcessor` 和 `RiskEngine` 都处理完毕后才能开始。它接收已通过风险检查的命令，并根据交易对将其路由到相应的 `IOrderBook` 实例执行撮合。结果作为 `MatcherTradeEvent` 对象链附加到 `OrderCommand` 上。
 *   **关键类位置**: `src/main/java/exchange/core2/core/processors/MatchingEngineRouter.java`
 
-### ResultsHandler (阶段 3) <a name="component-resultshandler"></a>
+### ResultsHandler (阶段 3)
 
 Disruptor 流水线中的最后一个处理器。其作用简单但至关重要：它接收完全处理过的 `OrderCommand`——现在已富含最终结果代码和撮合事件链——并将其传递给指定的下游事件消费者。
 *   **关键类位置**: `src/main/java/exchange/core2/core/processors/ResultsHandler.java`
 
 <h3 id="component-events">事件处理</h3>
 
-### SimpleEventsProcessor <a name="component-simpleeventsprocessor"></a>
+### SimpleEventsProcessor
 
 该组件充当主要的下游消费者。它从 `ResultsHandler` 接收处理过的 `OrderCommand`，并将内部复杂的的数据结构转换为适用于外部系统的干净、离散的事件。它“解包”命令以产生 `CommandResult`（高级别结果）、`TradeEvent`（详细交易信息）和 `OrderBook`（市场数据更新）。
 *   **关键类位置**: `src/main/java/exchange/core2/core/SimpleEventsProcessor.java`
 
-### 外部监听器 <a name="component-external-listeners"></a>
+### 外部监听器
 
 这代表了 `SimpleEventsProcessor` 生成的事件的最终目的地。这些是订阅事件流以与交易所状态保持同步的客户端应用程序、数据库、UI 前端或分析系统。
 
 <h3 id="component-persistence">持久化与恢复</h3>
 
-### DiskSerializationProcessor <a name="component-diskserializationprocessor"></a>
+### DiskSerializationProcessor
 
 这是一个**并行**的、独立于核心处理流水线的处理器。它的存在是为了保证系统的**持久化**和**灾难恢复**能力，而不会拖慢核心交易的性能。它的工作模式是整个系统可靠性的基石。
 *   **关键类位置**: `src/main/java/exchange/core2/core/processors/journaling/DiskSerializationProcessor.java`
