@@ -129,7 +129,10 @@ public final class ExchangeTestContainer implements AutoCloseable {
 
         //log.debug("CREATING exchange container");
 
-        this.threadFactory = new AffinityThreadFactory(AffinityThreadFactory.ThreadAffinityMode.THREAD_AFFINITY_ENABLE_PER_PHYSICAL_CORE);
+        final String osName = System.getProperty("os.name").toLowerCase();
+        this.threadFactory = new AffinityThreadFactory(osName.startsWith("win")
+                ? AffinityThreadFactory.ThreadAffinityMode.THREAD_AFFINITY_DISABLE
+                : AffinityThreadFactory.ThreadAffinityMode.THREAD_AFFINITY_ENABLE_PER_PHYSICAL_CORE);
 
         final ExchangeConfiguration exchangeConfiguration = ExchangeConfiguration.defaultBuilder()
                 .initStateCfg(initStateCfg)
