@@ -11,7 +11,10 @@
     <name>${project.groupId}:${project.artifactId}</name>
 
         <repositories>
-
+        <repository>
+            <id>central</id>
+            <url>https://repo.maven.apache.org/maven2</url>
+        </repository>
         <repository>
             <id>aliyun-public</id>
             <url>https://maven.aliyun.com/nexus/content/groups/public/</url>
@@ -23,15 +26,14 @@
         <repository>
             <id>aliyun-gradle-plugin</id>
             <url>https://maven.aliyun.com/repository/gradle-plugin</url>
-        </repository>
-        <repository>
-            <id>central</id>
-            <url>https://repo.maven.apache.org/maven2</url>
         </repository>
     </repositories>
 
     <pluginRepositories>
-
+        <pluginRepository>
+            <id>central</id>
+            <url>https://repo.maven.apache.org/maven2</url>
+        </pluginRepository>
         <pluginRepository>
             <id>aliyun-public</id>
             <url>https://maven.aliyun.com/nexus/content/groups/public/</url>
@@ -43,10 +45,6 @@
         <pluginRepository>
             <id>aliyun-gradle-plugin</id>
             <url>https://maven.aliyun.com/repository/gradle-plugin</url>
-        </pluginRepository>
-        <pluginRepository>
-            <id>central</id>
-            <url>https://repo.maven.apache.org/maven2</url>
         </pluginRepository>
     </pluginRepositories>
 
@@ -378,6 +376,9 @@
                     <outputDirectory>${delombok.output}</outputDirectory>
                     <addOutputDirectory>false</addOutputDirectory>
                     <encoding>UTF-8</encoding>
+                    <excludes>
+                        <exclude>**/target/generated-sources/**</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
             <plugin>
