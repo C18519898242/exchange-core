@@ -139,7 +139,7 @@ public final class PerformanceConfiguration {
                 .maxGroupDurationNs(10_000)
                 .sendL2ForEveryCmd(false)
                 .l2RefreshDepth(8)
-                .threadFactory(new AffinityThreadFactory(AffinityThreadFactory.ThreadAffinityMode.THREAD_AFFINITY_ENABLE_PER_LOGICAL_CORE))
+                .threadFactory(Thread::new)
                 .waitStrategy(CoreWaitStrategy.BUSY_SPIN)
                 .binaryCommandsLz4CompressorFactory(() -> LZ4Factory.fastestInstance().highCompressor())
                 .orderBookFactory(OrderBookDirectImpl::new);
@@ -155,7 +155,7 @@ public final class PerformanceConfiguration {
                 .maxGroupDurationNs(4_000_000)
                 .sendL2ForEveryCmd(false)
                 .l2RefreshDepth(8)
-                .threadFactory(new AffinityThreadFactory(AffinityThreadFactory.ThreadAffinityMode.THREAD_AFFINITY_ENABLE_PER_LOGICAL_CORE))
+                .threadFactory(Thread::new)
                 .waitStrategy(CoreWaitStrategy.BUSY_SPIN)
                 .binaryCommandsLz4CompressorFactory(() -> LZ4Factory.fastestInstance().highCompressor())
                 .orderBookFactory(OrderBookDirectImpl::new);

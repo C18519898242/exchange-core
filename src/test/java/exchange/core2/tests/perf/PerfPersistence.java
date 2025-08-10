@@ -81,7 +81,7 @@ public final class PerfPersistence {
                         .allowedSymbolTypes(ExchangeTestContainer.AllowedSymbolTypes.BOTH)
                         .preFillMode(TestOrdersGeneratorConfig.PreFillMode.ORDERS_NUMBER_PLUS_QUARTER)
                         .build(),
-                25);
+                1);
     }
 
     @Test
@@ -96,7 +96,7 @@ public final class PerfPersistence {
                 TestDataParameters.largeBuilder()
                         .preFillMode(TestOrdersGeneratorConfig.PreFillMode.ORDERS_NUMBER_PLUS_QUARTER)
                         .build(),
-                25);
+                1);
     }
 
     @Test
@@ -111,7 +111,24 @@ public final class PerfPersistence {
                 TestDataParameters.hugeBuilder()
                         .preFillMode(TestOrdersGeneratorConfig.PreFillMode.ORDERS_NUMBER_PLUS_QUARTER)
                         .build(),
-                25);
+                1);
+    }
+
+
+
+    @Test
+    public void testPersistenceLocal() throws Exception {
+        PersistenceTestsModule.persistenceTestImpl(
+                PerformanceConfiguration.throughputPerformanceBuilder()
+                        .ringBufferSize(32 * 1024)
+                        .matchingEnginesNum(4)
+                        .riskEnginesNum(4)
+                        .msgsInGroupLimit(1024)
+                        .build(),
+                TestDataParameters.localTestBuilder()
+                        .preFillMode(TestOrdersGeneratorConfig.PreFillMode.ORDERS_NUMBER_PLUS_QUARTER)
+                        .build(),
+                1);
     }
 
 

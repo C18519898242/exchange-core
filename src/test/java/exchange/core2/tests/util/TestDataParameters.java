@@ -92,4 +92,22 @@ public class TestDataParameters {
                 .allowedSymbolTypes(ExchangeTestContainer.AllowedSymbolTypes.BOTH)
                 .preFillMode(TestOrdersGeneratorConfig.PreFillMode.ORDERS_NUMBER);
     }
+
+    /**
+     * - 2K active users (6.6K currency accounts)
+     * - 10K pending limit-orders
+     * - 100 symbols
+     *
+     * @return huge exchange test data configuration
+     */
+    public static TestDataParameters.TestDataParametersBuilder localTestBuilder() {
+        return TestDataParameters.builder()
+                .totalTransactionsNumber(30_000_000)
+                .targetOrderBookOrdersTotal(3_00_000)
+                .numAccounts(100_000)
+                .currenciesAllowed(TestConstants.ALL_CURRENCIES)
+                .numSymbols(3_00)
+                .allowedSymbolTypes(ExchangeTestContainer.AllowedSymbolTypes.BOTH)
+                .preFillMode(TestOrdersGeneratorConfig.PreFillMode.ORDERS_NUMBER);
+    }
 }
