@@ -115,18 +115,45 @@ flowchart TD
 
 #### `事件路由器` (EventRouter)
 这是整个下游设计的核心，它紧跟在 `SimpleEventsProcessor` 之后。
-*   **职责**: 检查每一个从核心引擎产生的事件，并将其无状态地分发到多个下游：
-    1.  **路由到 `OrderGateway`**: 将私有事件（如 `TradeEvent`）直接派发给 `OrderGateway` 的 `连接分发器`。
-    2.  **路由到 `TradeDataGateway`**: 将完整的 `TradeEvent` 写入其专用队列。
-    3.  **路由到 `MarketDataGateway`**: 将脱敏后的 `TradeEvent` 和 `OrderBook` 更新写入其专用队列。
-    4.  **路由到 `AdminGateway`**: 将管理类命令的 `CommandResult` 写入 `AdminEvents` 队列。
-    5.  **路由到 `余额处理器`**: 将所有能影响余额的事件（`TradeEvent` 和管理类 `CommandResult`）发送给 `余额处理器`。
+*   **职责**: 检查每一个从核心引擎产生的事件，并将其无状态地分发到多个下游。
 
 #### `余额处理器` (Balance Processor)
 *   这是一个**有状态的**服务组件，是实现 `AdminGateway` 良好体验的关键。
-*   **职责**:
-    1.  在内部维护所有用户账户的**最新余额快照**。
-    2.  监听来自 `事件路由器` 的事件。
-    3.  根据事件内容，实时计算并更新内部的余额快照。
-    4.  生成一个包含**最新全量余额**的 `BalanceUpdateEvent` 事件。
-    5.  将这个 `BalanceUpdateEvent` 事件写入 `AdminGateway` 的 `AdminEvents` 队列。
+*   **职责**: 监听事件，计算并生成包含最新全量余额的 `BalanceUpdateEvent` 事件，并写入 `AdminEvents` 队列。
+
+## 4. 技术实现细节
+
+### 4.1. 通信协议与序列化
+*   **RPC 框架**: **gRPC**。基于 HTTP/2，提供高性能、强类型契约、原生跨语言支持和双向流能力，是构建高性能金融服务的理想选择。
+*   **数据序列化**: **Protocol Buffers (Protobuf)**。所有网络传输和写入队列的数据统一使用 Protobuf 格式。其优势在于：
+    1.  **健壮性与演进**: 优秀的向前/向后兼容性，允许API在不破坏客户端的情况下迭代。
+    2.  **性能**: 二进制格式，高效且紧凑。
+    3.  **契约即代码**: `.proto` 文件是所有语言实现的统一真理来源。
+
+### 4.2. 认证与授权
+*   **决策**: 采用标准的 **令牌 (Token-Based) + gRPC 拦截器 (Interceptor)** 模式。
+*   **工作流程**:
+    1.  提供一个专门的 `AuthService.Login` RPC，客户端使用长期凭证（如 API Key/Secret）换取一个有时效性的 **JWT**。
+    2.  客户端在后续所有业务 RPC 请求的**元数据 (Metadata)** 中携带此 JWT。
+    3.  在服务端，一个统一的 `AuthInterceptor` 会在业务逻辑执行前拦截请求，验证 JWT 合法性，并从中解析出 `userId`。
+    4.  `userId` 被放入 gRPC 的**上下文 (Context)** 中，供下游的业务逻辑安全使用。
+*   **理由**: 将认证逻辑与业务逻辑完全解耦，易于维护和扩展。
+
+### 4.3. 可靠事件流与断线续传
+*   **决策**: 将 **Chronicle Queue** 与**事件分发器**结合，为每个对外提供流式数据的网关（`AdminGateway`, `MarketDataGateway` 等）实现真正可靠的事件流。
+*   **工作流程**:
+    1.  `事件路由器` 或 `余额处理器` 将需要推送的事件，通过 Protobuf 序列化后，**追加写入对应的 Chronicle Queue**。
+    2.  当客户端发起订阅请求时（无论是首次还是断线重连），它必须在请求中携带它已收到的**最后一条消息的 `index` (序号)**。
+    3.  服务端为该订阅创建一个 Chronicle Queue 的**读取器 (`ExcerptTailer`)**，并移动到客户端指定的 `index`。
+    4.  从此位置开始顺序读取并推送消息。
+*   **理由**: 此方案保证了即使网关服务重启，事件也不会丢失。客户端可以随时断开，并在重新连接后从上次中断的地方继续，保证了消息的**不重、不漏、有序**。
+
+## 5. 后续实施步骤
+
+1.  **项目结构**: 创建一个新的 Maven 模块 `gateway` 用于存放所有网关相关代码。
+2.  **依赖管理**: 在 `pom.xml` 中添加 `grpc-java` (netty-shaded), `protobuf-java`, `chronicle-queue` 等核心依赖。
+3.  **Proto 定义**: 编写 `.proto` 文件，详细定义各网关的 `Service` 和 `Message`。
+4.  **核心编码**:
+    *   实现 `事件路由器` 和 `余额处理器`。
+    *   实现 `AuthService` 和 `AuthInterceptor`。
+    *   实现各网关服务的 gRPC 接口，并集成订阅-分发逻辑。
