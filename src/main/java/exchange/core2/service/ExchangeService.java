@@ -7,6 +7,8 @@ import exchange.core2.core.common.config.PerformanceConfiguration;
 import exchange.core2.core.common.config.SerializationConfiguration;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Scanner;
+
 @Slf4j
 public class ExchangeService {
 
@@ -14,8 +16,8 @@ public class ExchangeService {
 
         final String exchangeName = "MCE";
 
-        // 1. Create configuration based on command-line arguments
-        final ExchangeConfiguration config = createConfiguration(exchangeName, args);
+        // 1. Create configuration based on user interaction
+        final ExchangeConfiguration config = createConfiguration(exchangeName);
 
         // 2. Build ExchangeCore instance
         final ExchangeCore exchangeCore = ExchangeCore.builder()
@@ -52,33 +54,56 @@ public class ExchangeService {
         }
     }
 
-    private static ExchangeConfiguration createConfiguration(String exchangeName, String[] args) {
-        log.info("Welcome to {} Exchange Core.", exchangeName);
+    private static ExchangeConfiguration createConfiguration(String exchangeName) {
+        log.info("Welcome to the {} Exchange Core Engine.", exchangeName);
 
+        Scanner scanner = new Scanner(System.in);
         final InitialStateConfiguration initStateCfg;
 
-        if (args.length == 0) {
-            // Cold Start: No arguments provided
-            log.info("No arguments provided. Performing a Cold Start.");
-            initStateCfg = InitialStateConfiguration.cleanStartJournaling(exchangeName);
-        } else if (args.length == 2) {
-            // Hot Start: snapshotId and baseSeq are provided
-            log.info("Two arguments provided. Performing a Hot Start.");
-            try {
-                long snapshotId = Long.parseLong(args[0]);
-                long baseSeq = Long.parseLong(args[1]);
-                log.info("Using snapshotId={} and baseSeq={}", snapshotId, baseSeq);
-                initStateCfg = InitialStateConfiguration.lastKnownStateFromJournal(exchangeName, snapshotId, baseSeq);
-            } catch (NumberFormatException e) {
-                log.error("Invalid number format for snapshotId or baseSeq.", e);
-                printUsageAndExit();
+        System.out.println("Please select a startup mode:");
+        System.out.println("1. Cold Start - Start from a clean state");
+        System.out.println("2. Hot Start - Recover from a snapshot and journal");
+        System.out.print("Enter your choice (1 or 2): ");
+
+        String choice = scanner.nextLine().trim();
+
+        switch (choice) {
+            case "1":
+                // Cold Start
+                log.info("Cold start selected, starting fresh...");
+                initStateCfg = InitialStateConfiguration.cleanStartJournaling(exchangeName);
+                break;
+
+            case "2":
+                // Hot Start
+                log.info("Hot start selected, snapshot information is required...");
+
+                long snapshotId = 0;
+                long baseSeq = 0;
+
+                try {
+                    System.out.print("Please enter snapshotId: ");
+                    snapshotId = Long.parseLong(scanner.nextLine().trim());
+
+                    System.out.print("Please enter baseSeq: ");
+                    baseSeq = Long.parseLong(scanner.nextLine().trim());
+
+                    log.info("Performing hot start with snapshotId={}, baseSeq={}", snapshotId, baseSeq);
+                    initStateCfg = InitialStateConfiguration.lastKnownStateFromJournal(exchangeName, snapshotId, baseSeq);
+
+                } catch (NumberFormatException e) {
+                    log.error("Invalid format for snapshotId or baseSeq, please enter valid numbers", e);
+                    System.out.println("Invalid input format, exiting.");
+                    System.exit(1);
+                    throw new AssertionError(); // Should not be reached
+                }
+                break;
+
+            default:
+                log.error("Invalid choice: {}", choice);
+                System.out.println("Invalid choice, please enter 1 or 2. Exiting.");
+                System.exit(1);
                 throw new AssertionError(); // Should not be reached
-            }
-        } else {
-            // Invalid number of arguments
-            log.error("Invalid number of arguments.");
-            printUsageAndExit();
-            throw new AssertionError(); // Should not be reached
         }
 
         // Build the final configuration with production-ready settings
@@ -87,12 +112,5 @@ public class ExchangeService {
                 .initStateCfg(initStateCfg) // Use the dynamically created config
                 .serializationCfg(SerializationConfiguration.DISK_JOURNALING)
                 .build();
-    }
-
-    private static void printUsageAndExit() {
-        log.info("Usage:");
-        log.info("  java -jar mce-exchange-core.jar                (for a Cold Start)");
-        log.info("  java -jar mce-exchange-core.jar <snapshotId> <baseSeq> (for a Hot Start)");
-        System.exit(1);
     }
 }
