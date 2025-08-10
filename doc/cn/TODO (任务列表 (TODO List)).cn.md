@@ -12,9 +12,24 @@
     - 实现“尽力而为”的资金计算逻辑。
   - **相关文档**: [深度解析：市价单按数量买入的设计与实现](./DEEP_DIVE_MARKET_BUY_BY_QUANTITY.cn.md)
 
-- [ ] **架构设计与实现：接入网关层**
-  - **描述**: 设计并实现一个或多个接入网关，负责处理外部客户端的连接和协议转换，例如通过 TCP/JSON 或 Websocket 接收请求。
-  - **关键点**:
-    - 网关负责网络通信、协议解析、用户认证和流量控制。
-    - 网关应调用 `ExchangeApi` 提供的接口来执行交易操作。
-    - 保持网关层“薄”，将核心交易逻辑保留在 `exchange-core` 内部。
+- [ ] **架构实现：gRPC 网关集群**
+  - **描述**: 根据最终确定的架构方案，实现基于 gRPC 的高性能网关集群。
+  - **相关文档**: [网关架构设计](./GATEWAY_ARCHITECTURE (网关架构设计).cn.md)
+  - **子任务**:
+    - [ ] **项目设置**:
+      - [ ] 创建新的 Maven 模块 `gateway`。
+      - [ ] 在 `pom.xml` 中添加 `grpc-java`, `protobuf-java`, `chronicle-queue`, `bouncycastle` 等依赖。
+    - [ ] **Protobuf 定义**:
+      - [ ] 编写 `.proto` 文件，定义所有服务 (`OrderService`, `AdminService` 等) 和消息 (`LoginRequest`, `PlaceOrderRequest`, `BalanceUpdateEvent` 等)。
+    - [ ] **核心组件实现**:
+      - [ ] 实现基于 `Argon2id` 的密码哈希生成工具和验证逻辑。
+      - [ ] 实现 `AuthService`，处理基于用户名/密码的登录和会话管理。
+      - [ ] 实现 `事件路由器 (EventRouter)`，订阅核心事件并分发到不同的 Chronicle Queue。
+      - [ ] 实现 `余额处理器 (BalanceProcessor)`，作为有状态服务生成余额更新事件。
+    - [ ] **网关服务实现**:
+      - [ ] 实现 `OrderGateway` (私有交易通道)。
+      - [ ] 实现 `AdminGateway` (内部管理通道)。
+      - [ ] 实现 `MarketDataGateway` (公开行情通道)。
+      - [ ] 实现 `TradeDataGateway` (内部成交数据通道)。
+    - [ ] **测试**:
+      - [ ] 编写集成测试，模拟客户端连接、认证、下单和订阅事件，验证整个流程的正确性。
