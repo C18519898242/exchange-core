@@ -6,6 +6,23 @@
 
 核心交易引擎通过 `ExchangeCoreStarter` 类启动。这是一个标准的 Java 应用程序。
 
+### 配置文件
+
+服务的核心参数通过位于 `src/main/resources/application.yml` 的配置文件进行管理。在启动服务前，可以根据需要调整此文件。
+
+```yaml
+core:
+  performance:
+    profile: base # 可选值: base, latency, throughput
+  exchange-name: MCE
+```
+
+*   `performance.profile`: 定义性能策略。
+    *   `base`: 基础配置，适用于开发和功能测试，CPU占用较低。
+    *   `latency`: 低延迟优化，适用于对单笔请求响应速度要求极高的场景。
+    *   `throughput`: 高吞吐优化，适用于需要处理大量并发请求的生产环境。
+*   `exchange-name`: 定义交易所的名称，会影响日志和数据文件的存储路径。
+
 ### 启动命令
 
 在项目的根目录下，使用以下命令来编译和运行服务：
@@ -20,9 +37,9 @@ java -jar target/exchange-core-*.jar
 
 *注意：请将 `exchange-core-*.jar` 替换为 `target` 目录下实际生成的 JAR 文件名。*
 
-### 启动模式
+### 启动模式选择
 
-服务启动时，会要求操作员选择一种启动模式：
+服务启动后，会基于 `application.yml` 加载配置，并要求操作员通过交互式提示选择一种启动模式：
 
 1.  **冷启动 (Cold Start)**:
     *   **描述**: 从一个完全干净的状态启动。所有历史数据、用户账户、订单等都将被清空。

@@ -10,7 +10,8 @@ public class ExchangeCoreStarter {
 
     public static void main(String[] args) {
 
-        log.info("Welcome to the {} Exchange Core Engine.", ExchangeService.EXCHANGE_NAME);
+        // This will load the configuration from application.yml
+        AppConfig.getInstance();
 
         final ExchangeCore exchangeCore;
 

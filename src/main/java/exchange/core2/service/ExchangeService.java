@@ -14,8 +14,6 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public final class ExchangeService {
 
-    public static final String EXCHANGE_NAME = "MCE";
-
     @Getter
     private static ExchangeCore exchangeCore;
 
@@ -31,10 +29,20 @@ public final class ExchangeService {
             throw new IllegalStateException("ExchangeCore is already initialized");
         }
 
-        log.info("Creating a new ExchangeCore instance...");
+        final AppConfig appConfig = AppConfig.getInstance();
+        final String exchangeName = appConfig.getExchangeName();
+        final String performanceProfile = appConfig.getPerformanceProfile();
+
+        log.info("Creating a new ExchangeCore instance for {} with performance profile '{}'", exchangeName, performanceProfile);
+
+        final PerformanceConfiguration performanceCfg = switch (performanceProfile) {
+            case "latency" -> PerformanceConfiguration.latencyPerformanceBuilder().build();
+            case "throughput" -> PerformanceConfiguration.throughputPerformanceBuilder().build();
+            default -> PerformanceConfiguration.baseBuilder().build();
+        };
 
         final ExchangeConfiguration config = ExchangeConfiguration.defaultBuilder()
-                .performanceCfg(PerformanceConfiguration.baseBuilder().build())
+                .performanceCfg(performanceCfg)
                 .initStateCfg(initStateCfg)
                 .serializationCfg(SerializationConfiguration.DISK_JOURNALING)
                 .build();
@@ -54,11 +62,11 @@ public final class ExchangeService {
     }
 
     public static ExchangeCore coldStart() {
-        return createNew(InitialStateConfiguration.cleanStartJournaling(EXCHANGE_NAME));
+        return createNew(InitialStateConfiguration.cleanStartJournaling(AppConfig.getInstance().getExchangeName()));
     }
 
     public static ExchangeCore hotStart(final long snapshotId, final long baseSeq) {
-        return createNew(InitialStateConfiguration.lastKnownStateFromJournal(EXCHANGE_NAME, snapshotId, baseSeq));
+        return createNew(InitialStateConfiguration.lastKnownStateFromJournal(AppConfig.getInstance().getExchangeName(), snapshotId, baseSeq));
     }
 
 
