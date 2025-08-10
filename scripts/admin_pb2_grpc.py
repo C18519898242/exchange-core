@@ -45,6 +45,11 @@ class AdminServiceStub(object):
                 request_serializer=admin__pb2.LoginRequest.SerializeToString,
                 response_deserializer=admin__pb2.LoginResponse.FromString,
                 _registered_method=True)
+        self.StopEngine = channel.unary_unary(
+                '/exchange.core2.gateway.proto.AdminService/StopEngine',
+                request_serializer=admin__pb2.StopEngineRequest.SerializeToString,
+                response_deserializer=admin__pb2.StopEngineResponse.FromString,
+                _registered_method=True)
 
 
 class AdminServiceServicer(object):
@@ -65,6 +70,13 @@ class AdminServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def StopEngine(self, request, context):
+        """Stop the trading engine
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AdminServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -77,6 +89,11 @@ def add_AdminServiceServicer_to_server(servicer, server):
                     servicer.Login,
                     request_deserializer=admin__pb2.LoginRequest.FromString,
                     response_serializer=admin__pb2.LoginResponse.SerializeToString,
+            ),
+            'StopEngine': grpc.unary_unary_rpc_method_handler(
+                    servicer.StopEngine,
+                    request_deserializer=admin__pb2.StopEngineRequest.FromString,
+                    response_serializer=admin__pb2.StopEngineResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -134,6 +151,33 @@ class AdminService(object):
             '/exchange.core2.gateway.proto.AdminService/Login',
             admin__pb2.LoginRequest.SerializeToString,
             admin__pb2.LoginResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StopEngine(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/exchange.core2.gateway.proto.AdminService/StopEngine',
+            admin__pb2.StopEngineRequest.SerializeToString,
+            admin__pb2.StopEngineResponse.FromString,
             options,
             channel_credentials,
             insecure,

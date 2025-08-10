@@ -63,6 +63,16 @@ def run():
         except grpc.RpcError as e:
             print(f"An error occurred: {e.code()} - {e.details()}")
 
+        print("\n-------------- Stop Engine (should succeed) --------------")
+        try:
+            response = authed_stub.StopEngine(admin_pb2.StopEngineRequest())
+            if response.success:
+                print("Engine stop command sent successfully.")
+            else:
+                print("Failed to send engine stop command.")
+        except grpc.RpcError as e:
+            print(f"An error occurred: {e.code()} - {e.details()}")
+
 
 if __name__ == '__main__':
     run()

@@ -13,6 +13,9 @@ service AdminService {
 
   // Login RPC
   rpc Login(LoginRequest) returns (LoginResponse) {}
+
+  // Stop the trading engine
+  rpc StopEngine(StopEngineRequest) returns (StopEngineResponse) {}
 }
 
 // The request message for the Ping RPC.
@@ -35,4 +38,13 @@ message LoginResponse {
   bool success = 1;
   string message = 2;
   string token = 3;
+}
+
+// The request message for the StopEngine RPC.
+message StopEngineRequest {
+}
+
+// The response message for the StopEngine RPC.
+message StopEngineResponse {
+  bool success = 1;
 }

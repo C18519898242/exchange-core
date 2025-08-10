@@ -41,4 +41,12 @@ public final class AdminService extends AdminServiceGrpc.AdminServiceImplBase {
         responseObserver.onNext(responseBuilder.build());
         responseObserver.onCompleted();
     }
+
+    @Override
+    public void stopEngine(StopEngineRequest request, StreamObserver<StopEngineResponse> responseObserver) {
+        log.info("Received request to stop the engine.");
+        ExchangeService.shutdown();
+        responseObserver.onNext(StopEngineResponse.newBuilder().setSuccess(true).build());
+        responseObserver.onCompleted();
+    }
 }
