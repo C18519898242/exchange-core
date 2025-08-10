@@ -256,8 +256,12 @@ public final class DiskSerializationProcessor implements ISerializationProcessor
         final OrderCommandType cmdType = cmd.command;
 
         if (cmdType == OrderCommandType.SHUTDOWN_SIGNAL) {
-            flushBufferSync(false, cmd.timestamp);
-            log.debug("Shutdown signal received, flushed to disk");
+            if (channel == null) {
+                log.warn("Shutdown signal received, but journal channel is not open, skipping flush.");
+            } else {
+                flushBufferSync(false, cmd.timestamp);
+                log.debug("Shutdown signal received, flushed to disk");
+            }
             return;
         }
 
