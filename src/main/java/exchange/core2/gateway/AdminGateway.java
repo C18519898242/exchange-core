@@ -1,7 +1,7 @@
 package exchange.core2.gateway;
 
-import exchange.core2.core.ExchangeApi;
 import exchange.core2.service.AppConfig;
+import exchange.core2.service.ExchangeService;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import lombok.extern.slf4j.Slf4j;
@@ -14,10 +14,12 @@ public final class AdminGateway {
 
     private final Server server;
 
-    public AdminGateway(final AppConfig.GatewayConfig gatewayConfig, final ExchangeApi exchangeApi) {
+    public AdminGateway() {
+        final AppConfig appConfig = AppConfig.getInstance();
+        final AppConfig.GatewayConfig gatewayConfig = appConfig.getGatewayConfig();
         final AuthService authService = new AuthService(gatewayConfig);
-        final AdminService adminService = new AdminService(exchangeApi, authService);
-        this.server = ServerBuilder.forPort(gatewayConfig.getAdmin().getPort())
+        final AdminService adminService = new AdminService(ExchangeService.getApi(), authService);
+        this.server = ServerBuilder.forPort(appConfig.getAdminGatewayPort())
                 .addService(adminService)
                 .intercept(new AuthInterceptor(authService))
                 .build();
