@@ -29,19 +29,17 @@ public final class AdminService extends AdminServiceGrpc.AdminServiceImplBase {
         final String username = request.getUsername();
         final String password = request.getPassword();
 
-        final Context.CancellableContext context = Context.current().withCancellation();
-        final boolean success = authService.login(username, password, context);
+        final String token = authService.login(username, password);
 
-        if (!success) {
-            responseObserver.onNext(LoginResponse.newBuilder().setSuccess(false).setMessage("Invalid credentials").build());
-            responseObserver.onCompleted();
-            return;
+        LoginResponse.Builder responseBuilder = LoginResponse.newBuilder();
+
+        if (token != null) {
+            responseBuilder.setSuccess(true).setToken(token);
+        } else {
+            responseBuilder.setSuccess(false).setMessage("Invalid credentials");
         }
 
-        final Context newContext = Context.current().withValue(AuthService.USERNAME_CONTEXT_KEY, username);
-        newContext.run(() -> {
-            responseObserver.onNext(LoginResponse.newBuilder().setSuccess(true).build());
-            responseObserver.onCompleted();
-        });
+        responseObserver.onNext(responseBuilder.build());
+        responseObserver.onCompleted();
     }
 }

@@ -2,10 +2,10 @@ package exchange.core2.gateway;
 
 import exchange.core2.service.AppConfig;
 import io.grpc.Context;
-import io.grpc.Status;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -14,33 +14,39 @@ import java.util.stream.Collectors;
 public class AuthService {
 
     public static final Context.Key<String> USERNAME_CONTEXT_KEY = Context.key("username");
+    public static final io.grpc.Metadata.Key<String> AUTH_TOKEN_METADATA_KEY = io.grpc.Metadata.Key.of("auth-token", io.grpc.Metadata.ASCII_STRING_MARSHALLER);
+
 
     private final Map<String, AppConfig.UserConfig> users;
-    private final Map<String, Context.CancellableContext> activeSessions = new ConcurrentHashMap<>();
+    private final Map<String, String> activeSessions = new ConcurrentHashMap<>(); // token -> username
+    private final Map<String, String> userToToken = new ConcurrentHashMap<>(); // username -> token
 
     public AuthService(AppConfig.GatewayConfig gatewayConfig) {
         this.users = gatewayConfig.getAdmin().getUsers().stream()
                 .collect(Collectors.toMap(AppConfig.UserConfig::getUsername, Function.identity()));
     }
 
-    public boolean login(String username, String password, Context.CancellableContext context) {
+    public String login(String username, String password) {
         AppConfig.UserConfig user = users.get(username);
         if (user == null || !PasswordUtils.verifyPassword(password, user.getPassword())) {
-            return false;
+            return null;
         }
 
         // Handle single-session logic
-        Context.CancellableContext oldContext = activeSessions.put(username, context);
-        if (oldContext != null) {
+        if (userToToken.containsKey(username)) {
+            String oldToken = userToToken.remove(username);
+            activeSessions.remove(oldToken);
             log.warn("User {} logged in from a new location, terminating the old session.", username);
-            oldContext.cancel(Status.CANCELLED.withDescription("Logged in from another location").asRuntimeException());
         }
 
-        context.addListener(c -> {
-            activeSessions.remove(username);
-            log.info("User {} session terminated.", username);
-        }, Runnable::run);
+        String token = UUID.randomUUID().toString();
+        activeSessions.put(token, username);
+        userToToken.put(username, token);
+        log.info("User {} logged in successfully with token.", username);
+        return token;
+    }
 
-        return true;
+    public String getUsernameForToken(String token) {
+        return activeSessions.get(token);
     }
 }
