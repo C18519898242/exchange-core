@@ -1,4 +1,4 @@
 core:
   performance:
     profile: base # Options: base, latency, throughput
-  exchange-name: MCE
+  exchangeName: MCE

@@ -1,11 +1,11 @@
 package exchange.core2.service;
 
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.InputStream;
-import java.util.Map;
 import java.util.Objects;
 
 @Slf4j
@@ -31,17 +31,38 @@ public final class AppConfig {
             throw new IllegalStateException("Configuration file not found: " + configPath);
         }
 
-        final Map<String, Object> config = yaml.load(inputStream);
-        final Map<String, Object> coreConfig = (Map<String, Object>) config.get("core");
-        final Map<String, String> performanceConfig = (Map<String, String>) coreConfig.get("performance");
+        final RootConfig rootConfig = yaml.loadAs(inputStream, RootConfig.class);
+        final CoreConfig coreConfig = Objects.requireNonNull(rootConfig.getCore(), "core section is not defined in " + configPath);
+        final PerformanceConfig performanceConfig = Objects.requireNonNull(coreConfig.getPerformance(), "performance section is not defined in " + configPath);
 
-        this.performanceProfile = Objects.requireNonNull(performanceConfig.get("profile"), "performance.profile is not defined in " + configPath);
-        this.exchangeName = Objects.requireNonNull((String) coreConfig.get("exchange-name"), "exchange-name is not defined in " + configPath);
+        this.performanceProfile = Objects.requireNonNull(performanceConfig.getProfile(), "performance.profile is not defined in " + configPath);
+        this.exchangeName = Objects.requireNonNull(coreConfig.getExchangeName(), "exchange-name is not defined in " + configPath);
 
         log.info("Configuration loaded: profile={}, name={}", performanceProfile, exchangeName);
     }
 
     public static AppConfig getInstance() {
         return INSTANCE;
+    }
+
+    // --- YAML Deserialization POJOs ---
+
+    @Setter
+    @Getter
+    public static class RootConfig {
+        private CoreConfig core;
+    }
+
+    @Setter
+    @Getter
+    public static class CoreConfig {
+        private PerformanceConfig performance;
+        private String exchangeName;
+    }
+
+    @Setter
+    @Getter
+    public static class PerformanceConfig {
+        private String profile;
     }
 }
