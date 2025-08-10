@@ -2,3 +2,13 @@ core:
   performance:
     profile: base # Options: base, latency, throughput
   exchangeName: MCE
+
+gateway:
+  admin:
+    port: 9001
+  order:
+    port: 9002
+  trade:
+    port: 9003
+  market:
+    port: 9004

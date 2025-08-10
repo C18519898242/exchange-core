@@ -1,8 +1,10 @@
 package exchange.core2.service;
 
 import exchange.core2.core.ExchangeCore;
+import exchange.core2.gateway.AdminGateway;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
 import java.util.Scanner;
 
 @Slf4j
@@ -53,20 +55,30 @@ public class ExchangeCoreStarter {
         exchangeCore.startup();
         log.info("Exchange Core started successfully.");
 
+        final AdminGateway adminGateway;
+        try {
+            final AppConfig appConfig = AppConfig.getInstance();
+            adminGateway = new AdminGateway(appConfig.getAdminGatewayPort(), exchangeCore.getApi());
+            adminGateway.start();
+        } catch (IOException e) {
+            log.error("Failed to start AdminGateway", e);
+            // Optionally, shutdown the exchange core if the gateway is critical
+            ExchangeService.shutdown();
+            return;
+        }
+
+
         // Add a Shutdown Hook to gracefully stop the service
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            log.info("Shutdown signal received. Stopping Exchange Core gracefully...");
+            log.info("Shutdown signal received. Stopping services gracefully...");
+            adminGateway.stop();
             ExchangeService.shutdown();
         }));
 
-        // The main thread can finish, but the JVM will not exit because of the non-daemon threads from ExchangeCore.
-        log.info("Main thread is finishing. The service will keep running in the background.");
-        log.info("Press Ctrl+C to stop the service.");
-
         try {
-            Thread.currentThread().join();
+            adminGateway.blockUntilShutdown();
         } catch (InterruptedException e) {
-            log.warn("Main thread interrupted.");
+            log.warn("Main thread interrupted.", e);
             Thread.currentThread().interrupt();
         }
     }

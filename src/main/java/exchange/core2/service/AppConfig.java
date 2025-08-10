@@ -19,6 +19,9 @@ public final class AppConfig {
     @Getter
     private final String exchangeName;
 
+    @Getter
+    private final GatewayConfig gatewayConfig;
+
     private AppConfig() {
         final String configPath = "application.yml";
         final Yaml yaml = new Yaml();
@@ -37,6 +40,8 @@ public final class AppConfig {
 
         this.performanceProfile = Objects.requireNonNull(performanceConfig.getProfile(), "performance.profile is not defined in " + configPath);
         this.exchangeName = Objects.requireNonNull(coreConfig.getExchangeName(), "exchange-name is not defined in " + configPath);
+        this.gatewayConfig = Objects.requireNonNull(rootConfig.getGateway(), "gateway section is not defined in " + configPath);
+
 
         log.info("Configuration loaded: profile={}, name={}", performanceProfile, exchangeName);
     }
@@ -45,12 +50,17 @@ public final class AppConfig {
         return INSTANCE;
     }
 
+    public int getAdminGatewayPort() {
+        return gatewayConfig.getAdmin().getPort();
+    }
+
     // --- YAML Deserialization POJOs ---
 
     @Setter
     @Getter
     public static class RootConfig {
         private CoreConfig core;
+        private GatewayConfig gateway;
     }
 
     @Setter
@@ -64,5 +74,20 @@ public final class AppConfig {
     @Getter
     public static class PerformanceConfig {
         private String profile;
+    }
+
+    @Setter
+    @Getter
+    public static class GatewayConfig {
+        private ServiceConfig admin;
+        private ServiceConfig order;
+        private ServiceConfig trade;
+        private ServiceConfig market;
+    }
+
+    @Setter
+    @Getter
+    public static class ServiceConfig {
+        private int port;
     }
 }

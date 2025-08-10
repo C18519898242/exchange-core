@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package exchange.core2.gateway.proto;
+
+option java_multiple_files = true;
+option java_package = "exchange.core2.gateway.proto";
+option java_outer_classname = "AdminProto";
+
+// The admin service definition.
+service AdminService {
+  // A simple RPC to check connectivity.
+  rpc Ping(PingRequest) returns (PingResponse) {}
+}
+
+// The request message for the Ping RPC.
+message PingRequest {
+}
+
+// The response message for the Ping RPC.
+message PingResponse {
+  string message = 1;
+}
