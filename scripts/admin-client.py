@@ -38,6 +38,28 @@ def login(stub):
         return None
 
 
+def run_ping(stub):
+    print("\n-------------- Ping --------------")
+    try:
+        response = stub.Ping(admin_pb2.PingRequest())
+        print("Response from server: " + response.message)
+    except grpc.RpcError as e:
+        print(f"An error occurred: {e.code()} - {e.details()}")
+
+def run_stop_engine(stub):
+    print("\n-------------- Stop Engine --------------")
+    try:
+        response = stub.StopEngine(admin_pb2.StopEngineRequest())
+        if response.success:
+            print("Engine stop command sent successfully.")
+            return True
+        else:
+            print("Failed to send engine stop command.")
+            return False
+    except grpc.RpcError as e:
+        print(f"An error occurred: {e.code()} - {e.details()}")
+        return False
+
 def run():
     server_address = 'localhost:9001'
     
@@ -56,22 +78,24 @@ def run():
         intercepted_channel = grpc.intercept_channel(channel, interceptor)
         authed_stub = admin_pb2_grpc.AdminServiceStub(intercepted_channel)
 
-        print("\n-------------- Ping (should succeed) --------------")
-        try:
-            response = authed_stub.Ping(admin_pb2.PingRequest())
-            print("Response from server: " + response.message)
-        except grpc.RpcError as e:
-            print(f"An error occurred: {e.code()} - {e.details()}")
+        while True:
+            print("\nAvailable actions:")
+            print("  1. Ping Server")
+            print("  2. Stop Trading Engine")
+            print("  3. Exit")
+            choice = input("Enter your choice: ")
 
-        print("\n-------------- Stop Engine (should succeed) --------------")
-        try:
-            response = authed_stub.StopEngine(admin_pb2.StopEngineRequest())
-            if response.success:
-                print("Engine stop command sent successfully.")
+            if choice == '1':
+                run_ping(authed_stub)
+            elif choice == '2':
+                if run_stop_engine(authed_stub):
+                    print("Exiting client as engine is stopping.")
+                    break
+            elif choice == '3':
+                print("Exiting.")
+                break
             else:
-                print("Failed to send engine stop command.")
-        except grpc.RpcError as e:
-            print(f"An error occurred: {e.code()} - {e.details()}")
+                print("Invalid choice, please try again.")
 
 
 if __name__ == '__main__':
