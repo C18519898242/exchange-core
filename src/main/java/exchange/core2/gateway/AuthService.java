@@ -13,6 +13,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AuthService {
 
+    private static final AuthService INSTANCE = new AuthService();
+
     public static final Context.Key<String> USERNAME_CONTEXT_KEY = Context.key("username");
     public static final io.grpc.Metadata.Key<String> AUTH_TOKEN_METADATA_KEY = io.grpc.Metadata.Key.of("auth-token", io.grpc.Metadata.ASCII_STRING_MARSHALLER);
 
@@ -21,9 +23,14 @@ public class AuthService {
     private final Map<String, String> activeSessions = new ConcurrentHashMap<>(); // token -> username
     private final Map<String, String> userToToken = new ConcurrentHashMap<>(); // username -> token
 
-    public AuthService(AppConfig.GatewayConfig gatewayConfig) {
+    private AuthService() {
+        final AppConfig.GatewayConfig gatewayConfig = AppConfig.getInstance().getGatewayConfig();
         this.users = gatewayConfig.getAdmin().getUsers().stream()
                 .collect(Collectors.toMap(AppConfig.UserConfig::getUsername, Function.identity()));
+    }
+
+    public static AuthService getInstance() {
+        return INSTANCE;
     }
 
     public String login(String username, String password) {

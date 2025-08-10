@@ -16,12 +16,9 @@ public final class AdminGateway {
 
     public AdminGateway() {
         final AppConfig appConfig = AppConfig.getInstance();
-        final AppConfig.GatewayConfig gatewayConfig = appConfig.getGatewayConfig();
-        final AuthService authService = new AuthService(gatewayConfig);
-        final AdminService adminService = new AdminService(ExchangeService.getApi(), authService);
         this.server = ServerBuilder.forPort(appConfig.getAdminGatewayPort())
-                .addService(adminService)
-                .intercept(new AuthInterceptor(authService))
+                .addService(new AdminService())
+                .intercept(new AuthInterceptor())
                 .build();
     }
 

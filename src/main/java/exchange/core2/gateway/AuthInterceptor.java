@@ -1,16 +1,12 @@
 package exchange.core2.gateway;
 
 import io.grpc.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Objects;
 
 @Slf4j
-@RequiredArgsConstructor
 public class AuthInterceptor implements ServerInterceptor {
-
-    private final AuthService authService;
 
     @Override
     public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
@@ -33,7 +29,7 @@ public class AuthInterceptor implements ServerInterceptor {
             return new ServerCall.Listener<>() {};
         }
 
-        String username = authService.getUsernameForToken(token);
+        String username = AuthService.getInstance().getUsernameForToken(token);
         if (username == null) {
             log.warn("Invalid authentication token for call to {}", fullMethodName);
             call.close(Status.UNAUTHENTICATED.withDescription("Invalid auth token."), new Metadata());
