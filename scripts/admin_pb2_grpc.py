@@ -40,6 +40,11 @@ class AdminServiceStub(object):
                 request_serializer=admin__pb2.PingRequest.SerializeToString,
                 response_deserializer=admin__pb2.PingResponse.FromString,
                 _registered_method=True)
+        self.Login = channel.unary_unary(
+                '/exchange.core2.gateway.proto.AdminService/Login',
+                request_serializer=admin__pb2.LoginRequest.SerializeToString,
+                response_deserializer=admin__pb2.LoginResponse.FromString,
+                _registered_method=True)
 
 
 class AdminServiceServicer(object):
@@ -53,6 +58,13 @@ class AdminServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Login(self, request, context):
+        """Login RPC
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AdminServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -60,6 +72,11 @@ def add_AdminServiceServicer_to_server(servicer, server):
                     servicer.Ping,
                     request_deserializer=admin__pb2.PingRequest.FromString,
                     response_serializer=admin__pb2.PingResponse.SerializeToString,
+            ),
+            'Login': grpc.unary_unary_rpc_method_handler(
+                    servicer.Login,
+                    request_deserializer=admin__pb2.LoginRequest.FromString,
+                    response_serializer=admin__pb2.LoginResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -90,6 +107,33 @@ class AdminService(object):
             '/exchange.core2.gateway.proto.AdminService/Ping',
             admin__pb2.PingRequest.SerializeToString,
             admin__pb2.PingResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Login(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/exchange.core2.gateway.proto.AdminService/Login',
+            admin__pb2.LoginRequest.SerializeToString,
+            admin__pb2.LoginResponse.FromString,
             options,
             channel_credentials,
             insecure,

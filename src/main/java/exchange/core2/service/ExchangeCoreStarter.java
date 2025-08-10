@@ -58,7 +58,7 @@ public class ExchangeCoreStarter {
         final AdminGateway adminGateway;
         try {
             final AppConfig appConfig = AppConfig.getInstance();
-            adminGateway = new AdminGateway(appConfig.getAdminGatewayPort(), exchangeCore.getApi());
+            adminGateway = new AdminGateway(appConfig.getGatewayConfig(), exchangeCore.getApi());
             adminGateway.start();
         } catch (IOException e) {
             log.error("Failed to start AdminGateway", e);

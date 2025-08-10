@@ -6,6 +6,9 @@ core:
 gateway:
   admin:
     port: 9001
+    users:
+      - username: "admin"
+        password: "ZdhtHPSvSTfC5/DlvjyUJg==:bSfzlcq2jzu2XIxSRsnBr/4XSF6hp4hQEDyNdvHe+1Y="
   order:
     port: 9002
   trade:

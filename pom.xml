@@ -122,6 +122,13 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Bouncy Castle for hashing -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.78.1</version>
+        </dependency>
+
         <!-- logging -->
         <dependency>
             <groupId>org.slf4j</groupId>

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x61\x64min.proto\x12\x1c\x65xchange.core2.gateway.proto\"\r\n\x0bPingRequest\"\x1f\n\x0cPingResponse\x12\x0f\n\x07message\x18\x01 \x01(\t2o\n\x0c\x41\x64minService\x12_\n\x04Ping\x12).exchange.core2.gateway.proto.PingRequest\x1a*.exchange.core2.gateway.proto.PingResponse\"\x00\x42,\n\x1c\x65xchange.core2.gateway.protoB\nAdminProtoP\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x61\x64min.proto\x12\x1c\x65xchange.core2.gateway.proto\"\r\n\x0bPingRequest\"\x1f\n\x0cPingResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\"2\n\x0cLoginRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"1\n\rLoginResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xd3\x01\n\x0c\x41\x64minService\x12_\n\x04Ping\x12).exchange.core2.gateway.proto.PingRequest\x1a*.exchange.core2.gateway.proto.PingResponse\"\x00\x12\x62\n\x05Login\x12*.exchange.core2.gateway.proto.LoginRequest\x1a+.exchange.core2.gateway.proto.LoginResponse\"\x00\x42,\n\x1c\x65xchange.core2.gateway.protoB\nAdminProtoP\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,6 +36,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_PINGREQUEST']._serialized_end=58
   _globals['_PINGRESPONSE']._serialized_start=60
   _globals['_PINGRESPONSE']._serialized_end=91
-  _globals['_ADMINSERVICE']._serialized_start=93
-  _globals['_ADMINSERVICE']._serialized_end=204
+  _globals['_LOGINREQUEST']._serialized_start=93
+  _globals['_LOGINREQUEST']._serialized_end=143
+  _globals['_LOGINRESPONSE']._serialized_start=145
+  _globals['_LOGINRESPONSE']._serialized_end=194
+  _globals['_ADMINSERVICE']._serialized_start=197
+  _globals['_ADMINSERVICE']._serialized_end=408
 # @@protoc_insertion_point(module_scope)

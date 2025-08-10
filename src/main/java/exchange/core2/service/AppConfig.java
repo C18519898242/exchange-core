@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.InputStream;
+import java.util.List;
 import java.util.Objects;
 
 @Slf4j
@@ -79,7 +80,7 @@ public final class AppConfig {
     @Setter
     @Getter
     public static class GatewayConfig {
-        private ServiceConfig admin;
+        private AdminServiceConfig admin;
         private ServiceConfig order;
         private ServiceConfig trade;
         private ServiceConfig market;
@@ -89,5 +90,18 @@ public final class AppConfig {
     @Getter
     public static class ServiceConfig {
         private int port;
+    }
+
+    @Setter
+    @Getter
+    public static class AdminServiceConfig extends ServiceConfig {
+        private List<UserConfig> users;
+    }
+
+    @Setter
+    @Getter
+    public static class UserConfig {
+        private String username;
+        private String password;
     }
 }
