@@ -15,36 +15,12 @@
             <id>central</id>
             <url>https://repo.maven.apache.org/maven2</url>
         </repository>
-        <repository>
-            <id>aliyun-public</id>
-            <url>https://maven.aliyun.com/nexus/content/groups/public/</url>
-        </repository>
-        <repository>
-            <id>aliyun-jcenter</id>
-            <url>https://maven.aliyun.com/nexus/content/repositories/jcenter</url>
-        </repository>
-        <repository>
-            <id>aliyun-gradle-plugin</id>
-            <url>https://maven.aliyun.com/repository/gradle-plugin</url>
-        </repository>
     </repositories>
 
     <pluginRepositories>
         <pluginRepository>
             <id>central</id>
             <url>https://repo.maven.apache.org/maven2</url>
-        </pluginRepository>
-        <pluginRepository>
-            <id>aliyun-public</id>
-            <url>https://maven.aliyun.com/nexus/content/groups/public/</url>
-        </pluginRepository>
-        <pluginRepository>
-            <id>aliyun-jcenter</id>
-            <url>https://maven.aliyun.com/nexus/content/repositories/jcenter</url>
-        </pluginRepository>
-        <pluginRepository>
-            <id>aliyun-gradle-plugin</id>
-            <url>https://maven.aliyun.com/repository/gradle-plugin</url>
         </pluginRepository>
     </pluginRepositories>
 
@@ -58,7 +34,6 @@
         <maven.compiler.source>17</maven.compiler.source>
 
         <lombok.version>1.18.30</lombok.version>
-        <delombok.output>target/delombok</delombok.output>
 
         <grpc.version>1.50.2</grpc.version>
         <protobuf.version>3.21.7</protobuf.version>
@@ -342,6 +317,13 @@
                 <configuration>
                     <source>17</source>
                     <target>17</target>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
             <plugin>
@@ -349,81 +331,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.0.0-M3</version>
                 <configuration>
-                    <argLine>-Xmx4g --add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED</argLine>
+                    <argLine>-Xmx8g --add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED</argLine>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.projectlombok</groupId>
-                <artifactId>lombok-maven-plugin</artifactId>
-                <version>1.18.20.0</version>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.projectlombok</groupId>
-                        <artifactId>lombok</artifactId>
-                        <version>${lombok.version}</version>
-                    </dependency>
-                </dependencies>
-                <executions>
-                    <execution>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>delombok</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
-                    <outputDirectory>${delombok.output}</outputDirectory>
-                    <addOutputDirectory>false</addOutputDirectory>
-                    <encoding>UTF-8</encoding>
-                    <excludes>
-                        <exclude>**/target/generated-sources/**</exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <version>1.8</version>
-                <executions>
-                    <execution>
-                        <id>generate-delomboked-sources-jar</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <target>
-                                <jar destfile="${project.build.directory}/${project.build.finalName}-sources.jar"
-                                     basedir="${delombok.output}"/>
-                            </target>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>build-helper-maven-plugin</artifactId>
-                <version>3.1.0</version>
-                <executions>
-                    <execution>
-                        <id>attach-delomboked-sources-jar</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>attach-artifact</goal>
-                        </goals>
-                        <configuration>
-                            <artifacts>
-                                <artifact>
-                                    <file>${project.build.directory}/${project.build.finalName}-sources.jar
-                                    </file>
-                                    <type>jar</type>
-                                    <classifier>sources</classifier>
-                                </artifact>
-                            </artifacts>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -482,7 +391,6 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <sourcepath>${delombok.output}</sourcepath>
                     <doclint>none</doclint>
                     <skip>true</skip>
                 </configuration>
