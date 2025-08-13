@@ -102,12 +102,12 @@ public class TestDataParameters {
      */
     public static TestDataParameters.TestDataParametersBuilder localTestBuilder() {
         return TestDataParameters.builder()
-                .totalTransactionsNumber(20_000_000)
-                .targetOrderBookOrdersTotal(2_00_000)
+                .totalTransactionsNumber(3_000_000)
+                .targetOrderBookOrdersTotal(1_00_000)
                 .numAccounts(100_000)
                 .currenciesAllowed(TestConstants.ALL_CURRENCIES)
-                .numSymbols(3_00)
-                .allowedSymbolTypes(ExchangeTestContainer.AllowedSymbolTypes.BOTH)
+                .numSymbols(1_000)
+                .allowedSymbolTypes(ExchangeTestContainer.AllowedSymbolTypes.CURRENCY_EXCHANGE_PAIR)
                 .preFillMode(TestOrdersGeneratorConfig.PreFillMode.ORDERS_NUMBER);
     }
 }

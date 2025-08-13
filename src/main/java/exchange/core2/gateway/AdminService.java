@@ -1,11 +1,14 @@
 package exchange.core2.gateway;
 
 import exchange.core2.core.ExchangeApi;
+import exchange.core2.core.common.api.ApiAddUser;
+import exchange.core2.core.common.cmd.CommandResultCode;
 import exchange.core2.gateway.proto.*;
 import exchange.core2.service.ExchangeService;
-import io.grpc.Context;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 public final class AdminService extends AdminServiceGrpc.AdminServiceImplBase {
@@ -48,5 +51,20 @@ public final class AdminService extends AdminServiceGrpc.AdminServiceImplBase {
         ExchangeService.shutdown();
         responseObserver.onNext(StopEngineResponse.newBuilder().setSuccess(true).build());
         responseObserver.onCompleted();
+    }
+
+    @Override
+    public void addUser(AddUserRequest request, StreamObserver<AddUserResponse> responseObserver) {
+        final ApiAddUser addUserCmd = new ApiAddUser(request.getUid());
+        final CompletableFuture<CommandResultCode> future = exchangeApi.submitCommandAsync(addUserCmd);
+
+        future.thenAccept(resultCode -> {
+            final AddUserResponse response = AddUserResponse.newBuilder()
+                    .setSuccess(resultCode == CommandResultCode.SUCCESS)
+                    .setMessage(resultCode.toString())
+                    .build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        });
     }
 }

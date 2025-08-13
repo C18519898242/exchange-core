@@ -16,6 +16,9 @@ service AdminService {
 
   // Stop the trading engine
   rpc StopEngine(StopEngineRequest) returns (StopEngineResponse) {}
+
+  // Add a new user
+  rpc AddUser(AddUserRequest) returns (AddUserResponse) {}
 }
 
 // The request message for the Ping RPC.
@@ -47,4 +50,15 @@ message StopEngineRequest {
 // The response message for the StopEngine RPC.
 message StopEngineResponse {
   bool success = 1;
+}
+
+// The request message for the AddUser RPC.
+message AddUserRequest {
+  int64 uid = 1;
+}
+
+// The response message for the AddUser RPC.
+message AddUserResponse {
+  bool success = 1;
+  string message = 2;
 }

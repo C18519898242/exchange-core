@@ -60,6 +60,20 @@ def run_stop_engine(stub):
         print(f"An error occurred: {e.code()} - {e.details()}")
         return False
 
+def run_add_user(stub):
+    print("\n-------------- Add User --------------")
+    try:
+        uid = int(input("Enter user ID to add: "))
+        response = stub.AddUser(admin_pb2.AddUserRequest(uid=uid))
+        if response.success:
+            print(f"User {uid} added successfully.")
+        else:
+            print(f"Failed to add user {uid}: {response.message}")
+    except ValueError:
+        print("Invalid user ID. Please enter an integer.")
+    except grpc.RpcError as e:
+        print(f"An error occurred: {e.code()} - {e.details()}")
+
 def run():
     server_address = 'localhost:9001'
     
@@ -82,7 +96,8 @@ def run():
             print("\nAvailable actions:")
             print("  1. Ping Server")
             print("  2. Stop Trading Engine")
-            print("  3. Exit")
+            print("  3. Add User")
+            print("  4. Exit")
             choice = input("Enter your choice: ")
 
             if choice == '1':
@@ -92,6 +107,8 @@ def run():
                     print("Exiting client as engine is stopping.")
                     break
             elif choice == '3':
+                run_add_user(authed_stub)
+            elif choice == '4':
                 print("Exiting.")
                 break
             else:
