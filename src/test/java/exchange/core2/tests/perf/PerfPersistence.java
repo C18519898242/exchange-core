@@ -128,7 +128,7 @@ public final class PerfPersistence {
                 TestDataParameters.localTestBuilder()
                         .preFillMode(TestOrdersGeneratorConfig.PreFillMode.ORDERS_NUMBER_PLUS_QUARTER)
                         .build(),
-                3);
+                1);
     }
 
 
