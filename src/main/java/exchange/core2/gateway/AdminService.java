@@ -10,14 +10,12 @@ import lombok.extern.slf4j.Slf4j;
 import net.openhft.chronicle.bytes.Bytes;
 import net.openhft.chronicle.queue.ExcerptTailer;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
-import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.chronicle.wire.DocumentContext;
 
 @Slf4j
 public final class AdminService extends AdminServiceGrpc.AdminServiceImplBase {
 
     private final ExchangeApi exchangeApi = ExchangeService.getApi();
-    private final AuthService authService = AuthService.getInstance();
     private final SingleChronicleQueue adminQueue = AdminQueueService.getInstance().getQueue();
 
     @Override
