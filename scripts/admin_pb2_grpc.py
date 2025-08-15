@@ -4,6 +4,7 @@ import grpc
 import warnings
 
 import admin_pb2 as admin__pb2
+from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 GRPC_GENERATED_VERSION = '1.74.0'
 GRPC_VERSION = grpc.__version__
@@ -50,10 +51,15 @@ class AdminServiceStub(object):
                 request_serializer=admin__pb2.StopEngineRequest.SerializeToString,
                 response_deserializer=admin__pb2.StopEngineResponse.FromString,
                 _registered_method=True)
-        self.AddUser = channel.unary_unary(
-                '/exchange.core2.gateway.proto.AdminService/AddUser',
+        self.addUser = channel.unary_unary(
+                '/exchange.core2.gateway.proto.AdminService/addUser',
                 request_serializer=admin__pb2.AddUserRequest.SerializeToString,
-                response_deserializer=admin__pb2.AddUserResponse.FromString,
+                response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                _registered_method=True)
+        self.subscribeAdminEvents = channel.unary_stream(
+                '/exchange.core2.gateway.proto.AdminService/subscribeAdminEvents',
+                request_serializer=admin__pb2.SubscribeAdminEventsRequest.SerializeToString,
+                response_deserializer=admin__pb2.AdminEvent.FromString,
                 _registered_method=True)
 
 
@@ -82,8 +88,17 @@ class AdminServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def AddUser(self, request, context):
-        """Add a new user
+    def addUser(self, request, context):
+        """AddUser now only returns an empty confirmation message, indicating the request has been accepted.
+        The actual result will be returned asynchronously through the AdminEvents stream.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def subscribeAdminEvents(self, request, context):
+        """Subscribe to the admin events stream
+        The client calls this method after logging in to receive all relevant admin events.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -107,10 +122,15 @@ def add_AdminServiceServicer_to_server(servicer, server):
                     request_deserializer=admin__pb2.StopEngineRequest.FromString,
                     response_serializer=admin__pb2.StopEngineResponse.SerializeToString,
             ),
-            'AddUser': grpc.unary_unary_rpc_method_handler(
-                    servicer.AddUser,
+            'addUser': grpc.unary_unary_rpc_method_handler(
+                    servicer.addUser,
                     request_deserializer=admin__pb2.AddUserRequest.FromString,
-                    response_serializer=admin__pb2.AddUserResponse.SerializeToString,
+                    response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            ),
+            'subscribeAdminEvents': grpc.unary_stream_rpc_method_handler(
+                    servicer.subscribeAdminEvents,
+                    request_deserializer=admin__pb2.SubscribeAdminEventsRequest.FromString,
+                    response_serializer=admin__pb2.AdminEvent.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -206,7 +226,7 @@ class AdminService(object):
             _registered_method=True)
 
     @staticmethod
-    def AddUser(request,
+    def addUser(request,
             target,
             options=(),
             channel_credentials=None,
@@ -219,9 +239,36 @@ class AdminService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/exchange.core2.gateway.proto.AdminService/AddUser',
+            '/exchange.core2.gateway.proto.AdminService/addUser',
             admin__pb2.AddUserRequest.SerializeToString,
-            admin__pb2.AddUserResponse.FromString,
+            google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def subscribeAdminEvents(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/exchange.core2.gateway.proto.AdminService/subscribeAdminEvents',
+            admin__pb2.SubscribeAdminEventsRequest.SerializeToString,
+            admin__pb2.AdminEvent.FromString,
             options,
             channel_credentials,
             insecure,

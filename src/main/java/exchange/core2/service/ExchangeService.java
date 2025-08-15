@@ -2,6 +2,10 @@ package exchange.core2.service;
 
 import exchange.core2.core.ExchangeApi;
 import exchange.core2.core.ExchangeCore;
+import exchange.core2.core.IEventsHandler;
+import exchange.core2.core.common.api.ApiAddUser;
+import exchange.core2.core.common.cmd.OrderCommandType;
+import exchange.core2.gateway.EventPublishService;
 import exchange.core2.core.common.config.ExchangeConfiguration;
 import exchange.core2.core.common.config.InitialStateConfiguration;
 import exchange.core2.core.common.config.PerformanceConfiguration;
@@ -47,11 +51,16 @@ public final class ExchangeService {
                 .serializationCfg(SerializationConfiguration.DISK_JOURNALING)
                 .build();
 
+        final IEventsHandler eventsHandler = new EventPublishService();
+
         exchangeCore = ExchangeCore.builder()
                 .resultsConsumer((cmd, seq) -> {
-                    // TODO log results if needed
-                    // log.debug("Result: {}", cmd);
+                    if (cmd.command == OrderCommandType.ADD_USER) {
+                        ApiAddUser apiAddUser = new ApiAddUser(cmd.uid);
+                        eventsHandler.commandResult(new IEventsHandler.ApiCommandResult(apiAddUser, cmd.resultCode, seq));
+                    }
                 })
+                .eventsHandler(eventsHandler)
                 .exchangeConfiguration(config)
                 .build();
 

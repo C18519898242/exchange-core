@@ -419,7 +419,18 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <mainClass>exchange.core2.service.ExchangeCoreStarter</mainClass>
+                    <executable>java</executable>
+                    <arguments>
+                        <argument>--add-exports=java.base/sun.nio.ch=ALL-UNNAMED</argument>
+                        <argument>--add-opens=java.base/sun.nio.ch=ALL-UNNAMED</argument>
+                        <argument>--add-opens=java.base/java.nio=ALL-UNNAMED</argument>
+                        <argument>--add-opens=java.base/java.lang=ALL-UNNAMED</argument>
+                        <argument>--add-opens=java.base/java.lang.reflect=ALL-UNNAMED</argument>
+                        <argument>--add-opens=java.base/jdk.internal.ref=ALL-UNNAMED</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>exchange.core2.service.ExchangeCoreStarter</argument>
+                    </arguments>
                 </configuration>
             </plugin>
             <plugin>

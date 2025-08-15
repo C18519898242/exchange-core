@@ -72,9 +72,11 @@ public final class ExchangeCore {
      * Exchange core constructor.
      *  @param resultsConsumer       - custom consumer of processed commands
      * @param exchangeConfiguration - exchange configuration
+     * @param eventsHandler         - exchange events handler
      */
     @Builder
     public ExchangeCore(final ObjLongConsumer<OrderCommand> resultsConsumer,
+                        final IEventsHandler eventsHandler,
                         final ExchangeConfiguration exchangeConfiguration) {
 
         log.debug("Building exchange core from configuration: {}", exchangeConfiguration);
@@ -204,6 +206,10 @@ public final class ExchangeCore {
 
         mainHandlerGroup.handleEventsWith((cmd, seq, eob) -> {
             resultsHandler.onEvent(cmd, seq, eob);
+            if (eventsHandler != null) {
+                // TODO convert OrderCommand to ApiCommandResult
+//                eventsHandler.commandResult();
+            }
             api.processResult(seq, cmd); // TODO SLOW ?(volatile operations)
         });
 

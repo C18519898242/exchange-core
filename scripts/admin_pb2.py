@@ -22,9 +22,10 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
+from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x61\x64min.proto\x12\x1c\x65xchange.core2.gateway.proto\"\r\n\x0bPingRequest\"\x1f\n\x0cPingResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\"2\n\x0cLoginRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"@\n\rLoginResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\r\n\x05token\x18\x03 \x01(\t\"\x13\n\x11StopEngineRequest\"%\n\x12StopEngineResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x1d\n\x0e\x41\x64\x64UserRequest\x12\x0b\n\x03uid\x18\x01 \x01(\x03\"3\n\x0f\x41\x64\x64UserResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xb0\x03\n\x0c\x41\x64minService\x12_\n\x04Ping\x12).exchange.core2.gateway.proto.PingRequest\x1a*.exchange.core2.gateway.proto.PingResponse\"\x00\x12\x62\n\x05Login\x12*.exchange.core2.gateway.proto.LoginRequest\x1a+.exchange.core2.gateway.proto.LoginResponse\"\x00\x12q\n\nStopEngine\x12/.exchange.core2.gateway.proto.StopEngineRequest\x1a\x30.exchange.core2.gateway.proto.StopEngineResponse\"\x00\x12h\n\x07\x41\x64\x64User\x12,.exchange.core2.gateway.proto.AddUserRequest\x1a-.exchange.core2.gateway.proto.AddUserResponse\"\x00\x42,\n\x1c\x65xchange.core2.gateway.protoB\nAdminProtoP\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x61\x64min.proto\x12\x1c\x65xchange.core2.gateway.proto\x1a\x1bgoogle/protobuf/empty.proto\"\r\n\x0bPingRequest\"\x1f\n\x0cPingResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\"2\n\x0cLoginRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"@\n\rLoginResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\r\n\x05token\x18\x03 \x01(\t\"\x13\n\x11StopEngineRequest\"%\n\x12StopEngineResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x1d\n\x0e\x41\x64\x64UserRequest\x12\x0b\n\x03uid\x18\x01 \x01(\x03\"5\n\x1bSubscribeAdminEventsRequest\x12\x16\n\x0elastEventIndex\x18\x01 \x01(\x03\"p\n\nAdminEvent\x12\r\n\x05index\x18\x01 \x01(\x03\x12\x45\n\x0e\x63ommand_result\x18\x02 \x01(\x0b\x32+.exchange.core2.gateway.proto.CommandResultH\x00\x42\x0c\n\nevent_type\"\x82\x01\n\rCommandResult\x12\x15\n\rcorrelationId\x18\x01 \x01(\t\x12\x0b\n\x03uid\x18\x02 \x01(\x03\x12<\n\nresultCode\x18\x03 \x01(\x0e\x32(.exchange.core2.gateway.proto.ResultCode\x12\x0f\n\x07message\x18\x04 \x01(\t*2\n\nResultCode\x12\x0b\n\x07SUCCESS\x10\x00\x12\x17\n\x13USER_ALREADY_EXISTS\x10\x01\x32\x98\x04\n\x0c\x41\x64minService\x12_\n\x04Ping\x12).exchange.core2.gateway.proto.PingRequest\x1a*.exchange.core2.gateway.proto.PingResponse\"\x00\x12\x62\n\x05Login\x12*.exchange.core2.gateway.proto.LoginRequest\x1a+.exchange.core2.gateway.proto.LoginResponse\"\x00\x12q\n\nStopEngine\x12/.exchange.core2.gateway.proto.StopEngineRequest\x1a\x30.exchange.core2.gateway.proto.StopEngineResponse\"\x00\x12Q\n\x07\x61\x64\x64User\x12,.exchange.core2.gateway.proto.AddUserRequest\x1a\x16.google.protobuf.Empty\"\x00\x12}\n\x14subscribeAdminEvents\x12\x39.exchange.core2.gateway.proto.SubscribeAdminEventsRequest\x1a(.exchange.core2.gateway.proto.AdminEvent0\x01\x42,\n\x1c\x65xchange.core2.gateway.protoB\nAdminProtoP\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,22 +33,28 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'admin_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\034exchange.core2.gateway.protoB\nAdminProtoP\001'
-  _globals['_PINGREQUEST']._serialized_start=45
-  _globals['_PINGREQUEST']._serialized_end=58
-  _globals['_PINGRESPONSE']._serialized_start=60
-  _globals['_PINGRESPONSE']._serialized_end=91
-  _globals['_LOGINREQUEST']._serialized_start=93
-  _globals['_LOGINREQUEST']._serialized_end=143
-  _globals['_LOGINRESPONSE']._serialized_start=145
-  _globals['_LOGINRESPONSE']._serialized_end=209
-  _globals['_STOPENGINEREQUEST']._serialized_start=211
-  _globals['_STOPENGINEREQUEST']._serialized_end=230
-  _globals['_STOPENGINERESPONSE']._serialized_start=232
-  _globals['_STOPENGINERESPONSE']._serialized_end=269
-  _globals['_ADDUSERREQUEST']._serialized_start=271
-  _globals['_ADDUSERREQUEST']._serialized_end=300
-  _globals['_ADDUSERRESPONSE']._serialized_start=302
-  _globals['_ADDUSERRESPONSE']._serialized_end=353
-  _globals['_ADMINSERVICE']._serialized_start=356
-  _globals['_ADMINSERVICE']._serialized_end=788
+  _globals['_RESULTCODE']._serialized_start=633
+  _globals['_RESULTCODE']._serialized_end=683
+  _globals['_PINGREQUEST']._serialized_start=74
+  _globals['_PINGREQUEST']._serialized_end=87
+  _globals['_PINGRESPONSE']._serialized_start=89
+  _globals['_PINGRESPONSE']._serialized_end=120
+  _globals['_LOGINREQUEST']._serialized_start=122
+  _globals['_LOGINREQUEST']._serialized_end=172
+  _globals['_LOGINRESPONSE']._serialized_start=174
+  _globals['_LOGINRESPONSE']._serialized_end=238
+  _globals['_STOPENGINEREQUEST']._serialized_start=240
+  _globals['_STOPENGINEREQUEST']._serialized_end=259
+  _globals['_STOPENGINERESPONSE']._serialized_start=261
+  _globals['_STOPENGINERESPONSE']._serialized_end=298
+  _globals['_ADDUSERREQUEST']._serialized_start=300
+  _globals['_ADDUSERREQUEST']._serialized_end=329
+  _globals['_SUBSCRIBEADMINEVENTSREQUEST']._serialized_start=331
+  _globals['_SUBSCRIBEADMINEVENTSREQUEST']._serialized_end=384
+  _globals['_ADMINEVENT']._serialized_start=386
+  _globals['_ADMINEVENT']._serialized_end=498
+  _globals['_COMMANDRESULT']._serialized_start=501
+  _globals['_COMMANDRESULT']._serialized_end=631
+  _globals['_ADMINSERVICE']._serialized_start=686
+  _globals['_ADMINSERVICE']._serialized_end=1222
 # @@protoc_insertion_point(module_scope)

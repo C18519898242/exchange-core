@@ -6,6 +6,8 @@ option java_multiple_files = true;
 option java_package = "exchange.core2.gateway.proto";
 option java_outer_classname = "AdminProto";
 
+import "google/protobuf/empty.proto";
+
 // The admin service definition.
 service AdminService {
   // A simple RPC to check connectivity.
@@ -17,8 +19,13 @@ service AdminService {
   // Stop the trading engine
   rpc StopEngine(StopEngineRequest) returns (StopEngineResponse) {}
 
-  // Add a new user
-  rpc AddUser(AddUserRequest) returns (AddUserResponse) {}
+  // AddUser now only returns an empty confirmation message, indicating the request has been accepted.
+  // The actual result will be returned asynchronously through the AdminEvents stream.
+  rpc addUser(AddUserRequest) returns (google.protobuf.Empty) {}
+
+  // Subscribe to the admin events stream
+  // The client calls this method after logging in to receive all relevant admin events.
+  rpc subscribeAdminEvents(SubscribeAdminEventsRequest) returns (stream AdminEvent);
 }
 
 // The request message for the Ping RPC.
@@ -57,8 +64,34 @@ message AddUserRequest {
   int64 uid = 1;
 }
 
-// The response message for the AddUser RPC.
-message AddUserResponse {
-  bool success = 1;
-  string message = 2;
+// The response message for the AddUser RPC has been removed as addUser now returns google.protobuf.Empty.
+
+// Subscription request, containing the index of the last event received by the client, for resuming connection
+message SubscribeAdminEventsRequest {
+  int64 lastEventIndex = 1; // 0 for the first subscription
+}
+
+// Unified admin event message
+message AdminEvent {
+  int64 index = 1; // Unique index of the event in the Chronicle Queue
+
+  oneof event_type {
+    CommandResult command_result = 2;
+    // Other events can be added in the future, such as BalanceUpdateEvent
+  }
+}
+
+// CommandResult remains unchanged, but needs to include information about the original command
+message CommandResult {
+  // A correlationId or commandType can be added to associate with the original request
+  string correlationId = 1;
+  int64 uid = 2;
+  ResultCode resultCode = 3;
+  string message = 4;
+}
+
+enum ResultCode {
+  SUCCESS = 0;
+  USER_ALREADY_EXISTS = 1;
+  // ...
 }
